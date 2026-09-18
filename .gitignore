@@ -1,0 +1,64 @@
+# ==============================================================================
+# Production .gitignore for Cadet Readiness Advisor RAG Application
+# ==============================================================================
+
+# --- Environments & Dependencies ---
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Environment Variables & Secrets (CRITICAL) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.streamlit/secrets.toml
+
+# --- Python Caching & Bytecode ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Vector Database & Index Cache (Re-built on deployment) ---
+chroma_db/
+*.sqlite3
+*.sqlite3-journal
+
+# --- Preserved Data (Ensure raw PDFs are committed) ---
+!data/
+!data/raw/
+!data/raw/*.pdf
+
+# --- Operating System Artifacts ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- IDE & Editor Configurations ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Logs & Runtime Output ---
+*.log
+logs/
+.system_generated/
+
+AGENTS.md

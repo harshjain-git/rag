@@ -1,0 +1,128 @@
+[
+  {
+    "id": 1,
+    "type": "answerable",
+    "question": "What is the minimum Cronbach's Alpha coefficient threshold required for research baseline under APA standards?",
+    "target_documents": ["apa1.pdf"],
+    "ground_truth_answer": "An alpha coefficient of >= 0.70 is universally accepted as the baseline for research, while >= 0.90 is expected for clinical or diagnostic high-stakes decision-making."
+  },
+  {
+    "id": 2,
+    "type": "answerable",
+    "question": "What are the standard score mean and standard deviation for ASVAB test scores?",
+    "target_documents": ["asvab2.pdf"],
+    "ground_truth_answer": "Scores on the ASVAB tests are reported as standard scores with a mean of 50 and a standard deviation of 10."
+  },
+  {
+    "id": 3,
+    "type": "answerable",
+    "question": "Which subtests make up the Armed Forces Qualification Test (AFQT) composite score?",
+    "target_documents": ["asvab1.pdf"],
+    "ground_truth_answer": "The AFQT score is computed from four ASVAB subtests: Arithmetic Reasoning (AR), Mathematics Knowledge (MK), Paragraph Comprehension (PC), and Word Knowledge (WK)."
+  },
+  {
+    "id": 4,
+    "type": "answerable",
+    "question": "What 6 training scenarios are evaluated in the Military Training Mental Toughness Inventory (MTMTI)?",
+    "target_documents": ["military_psyc2.pdf"],
+    "ground_truth_answer": "The 6 MTMTI scenarios evaluate performance retention when: (1) recent performance has been poor, (2) in pain/physical effort, (3) conditions are difficult, (4) reprimanded/punished, (5) lack of sleep, and (6) under pressure to perform well."
+  },
+  {
+    "id": 5,
+    "type": "answerable",
+    "question": "How is Inter-Rater Reliability quantified according to APA psychometric guidelines?",
+    "target_documents": ["apa1.pdf"],
+    "ground_truth_answer": "Inter-Rater Reliability is quantified using Cohen's Kappa for nominal data or Fleiss' Kappa for multiple raters."
+  },
+  {
+    "id": 6,
+    "type": "answerable",
+    "question": "What is the primary role of Operational Psychology consultation in military personnel screening?",
+    "target_documents": ["military_psyc1.pdf"],
+    "ground_truth_answer": "Operational Psychology consultation evaluates psychological stability, operational suitability, resilience, and risk assessment for high-risk military personnel screening."
+  },
+  {
+    "id": 7,
+    "type": "answerable",
+    "question": "What statistical method is recommended by APA guidelines for evaluating construct validity structural hypotheses?",
+    "target_documents": ["apa1.pdf"],
+    "ground_truth_answer": "Confirmatory Factor Analysis (CFA) is specified by APA guidelines as the hypothesis-testing framework for construct validity."
+  },
+  {
+    "id": 8,
+    "type": "answerable",
+    "question": "How does Computerized Adaptive Testing (CAT-ASVAB) select items for candidates?",
+    "target_documents": ["asvab2.pdf"],
+    "ground_truth_answer": "CAT-ASVAB dynamically selects items based on candidate accuracy on previous responses, tailoring question difficulty to estimated candidate ability."
+  },
+  {
+    "id": 9,
+    "type": "unanswerable",
+    "question": "What is the minimum passing swim time cutoff for the US Navy SEAL Physical Screening Test (PST)?",
+    "target_documents": [],
+    "ground_truth_answer": "Not in corpus — the provided documents do not contain enough information to answer this question."
+  },
+  {
+    "id": 10,
+    "type": "unanswerable",
+    "question": "What is the recommended SAT Math score cutoff for US Air Force Academy officer admissions?",
+    "target_documents": [],
+    "ground_truth_answer": "Not in corpus — the provided documents do not contain enough information to answer this question."
+  },
+  {
+    "id": 11,
+    "type": "unanswerable",
+    "question": "What are the medical disqualification criteria for US Navy Submarine duty officers?",
+    "target_documents": [],
+    "ground_truth_answer": "Not in corpus — the provided documents do not contain enough information to answer this question."
+  },
+  {
+    "id": 12,
+    "type": "unanswerable",
+    "question": "How does the MMPI-3 scale measure post-traumatic stress disorder in veteran clinical evaluations?",
+    "target_documents": [],
+    "ground_truth_answer": "Not in corpus — the provided documents do not contain enough information to answer this question."
+  },
+  {
+    "id": 13,
+    "type": "unanswerable",
+    "question": "What are the physical fitness test 2-mile run time cutoffs for Army Rangers?",
+    "target_documents": [],
+    "ground_truth_answer": "Not in corpus — the provided documents do not contain enough information to answer this question."
+  },
+  {
+    "id": 14,
+    "type": "comparison",
+    "question": "How do the internal consistency metrics of the Military Training Mental Toughness Inventory (MTMTI) compare with general APA baseline reliability standards?",
+    "target_documents": ["military_psyc2.pdf", "apa1.pdf"],
+    "ground_truth_answer": "MTMTI demonstrates high internal consistency (alpha = 0.87 to 0.94), which exceeds the general APA research baseline threshold of alpha >= 0.70."
+  },
+  {
+    "id": 15,
+    "type": "comparison",
+    "question": "Compare how cognitive aptitude is assessed by the ASVAB versus how psychological resilience is assessed by military mental toughness inventories.",
+    "target_documents": ["asvab1.pdf", "military_psyc2.pdf"],
+    "ground_truth_answer": "ASVAB measures cognitive aptitude across subtests (AR, MK, WK, PC), whereas military mental toughness inventories measure behavioral performance retention under stress, pain, and sleep deprivation."
+  },
+  {
+    "id": 16,
+    "type": "comparison",
+    "question": "What is the distinction between Content Validity and Construct Validity under APA psychometric reporting standards?",
+    "target_documents": ["apa1.pdf"],
+    "ground_truth_answer": "Content validity evaluates item relevance using Subject Matter Expert (SME) ratios (CVR), whereas Construct validity tests underlying structural hypotheses using Confirmatory Factor Analysis (CFA)."
+  },
+  {
+    "id": 17,
+    "type": "comparison",
+    "question": "How do ASVAB standard scores differ from AFQT percentile qualification categories?",
+    "target_documents": ["asvab1.pdf", "asvab2.pdf"],
+    "ground_truth_answer": "ASVAB standard scores have a Mean of 50 and SD of 10 for individual subtests, whereas AFQT percentile scores rank candidates into enlistment qualification categories (Categories I through V)."
+  },
+  {
+    "id": 18,
+    "type": "comparison",
+    "question": "Compare the operational stress factors evaluated during military psychological screening with APA ethical guidelines for candidate evaluation.",
+    "target_documents": ["military_psyc1.pdf", "apa2.pdf"],
+    "ground_truth_answer": "Military operational screening evaluates candidate duty fitness and risk under combat/training stressors, while APA ethical guidelines mandate informed consent, fair testing, and candidate confidentiality."
+  }
+]
