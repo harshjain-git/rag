@@ -133,9 +133,9 @@ def get_pdf_page_image(pdf_path_str: str, page_number: int):
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Pre-load vector store once in background
-with st.spinner("Initializing Vector Store & Embedding Model..."):
-    get_cached_vector_store()
+# # Pre-load vector store once in background
+# with st.spinner("Initializing Vector Store & Embedding Model..."):
+#     get_cached_vector_store()
 
 
 # --- Sidebar ---
