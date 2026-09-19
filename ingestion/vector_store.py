@@ -22,27 +22,74 @@ from typing import List, Dict, Any
 
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
-from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 
 # Load central configuration
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 import config
 
 
+class GeminiEmbeddings:
+    """
+    Custom LangChain-compatible embeddings class using Google GenAI SDK.
+    Implemented to avoid loading heavy PyTorch/Sentence-Transformers libraries on Render.
+    """
+    def __init__(self):
+        from google import genai
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is not configured.")
+        self.client = genai.Client(api_key=api_key)
+        self.model = config.GEMINI_EMBEDDING_MODEL
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        # Batch requests to avoid sending too many texts at once
+        batch_size = 32
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            try:
+                response = self.client.models.embed_content(
+                    model=self.model,
+                    contents=batch
+                )
+                for emb in response.embeddings:
+                    all_embeddings.append(emb.values)
+            except Exception as e:
+                print(f"Error calling Gemini Embedding API: {e}")
+                raise
+        return all_embeddings
+
+    def embed_query(self, text: str) -> List[float]:
+        try:
+            response = self.client.models.embed_content(
+                model=self.model,
+                contents=text
+            )
+            return response.embeddings[0].values
+        except Exception as e:
+            print(f"Error calling Gemini Embedding API: {e}")
+            raise
+
+
 def get_embedding_function():
     """
-    Initializes and returns the BAAI/bge-base-en-v1.5 embedding model.
+    Initializes and returns the embedding model based on config.
     """
-    return HuggingFaceBgeEmbeddings(
-    model_name=config.EMBEDDING_MODEL_NAME,
-    model_kwargs={
-        "device": "cpu"
-    },
-    encode_kwargs={
-        "normalize_embeddings": True,
-        "batch_size": 8
-    }
-)
+    if config.EMBEDDING_PROVIDER == "gemini":
+        return GeminiEmbeddings()
+    elif config.EMBEDDING_PROVIDER == "bge":
+        # Conditionally import so we don't load PyTorch on Render
+        from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+        return HuggingFaceBgeEmbeddings(
+            model_name=config.EMBEDDING_MODEL_NAME,
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={
+                "normalize_embeddings": True,
+                "batch_size": 8
+            }
+        )
+    else:
+        raise ValueError(f"Unknown EMBEDDING_PROVIDER: {config.EMBEDDING_PROVIDER}")
 
 
 def get_vector_store():

@@ -5,7 +5,9 @@ services:
     branch: master
     plan: starter
     region: oregon
-    buildCommand: "pip install --upgrade pip && pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir -r requirements.txt && python ingestion/build_vector_db.py"
+    # Old BGE/PyTorch buildCommand:
+    # buildCommand: "pip install --upgrade pip && pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu && pip install --no-cache-dir -r requirements.txt && python ingestion/build_vector_db.py"
+    buildCommand: "pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && python ingestion/build_vector_db.py"
     startCommand: "streamlit run app/streamlit_app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
     envVars:
       - key: GEMINI_API_KEY

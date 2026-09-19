@@ -40,7 +40,8 @@ def build_and_verify_vector_db():
     print(f"      Generated {len(chunks)} total chunks.")
 
     # 4. Embed and persist in ChromaDB
-    print("\n[4/4] Embedding chunks with BAAI/bge-base-en-v1.5 & saving to ChromaDB...")
+    model_display = config.GEMINI_EMBEDDING_MODEL if config.EMBEDDING_PROVIDER == "gemini" else config.EMBEDDING_MODEL_NAME
+    print(f"\n[4/4] Embedding chunks with {model_display} & saving to ChromaDB...")
     vector_store = get_vector_store()
     add_chunks_to_vector_store(chunks, vector_store)
     print(f"      SUCCESS: Persisted {len(chunks)} chunks to '{config.CHROMA_DB_DIR}'!")

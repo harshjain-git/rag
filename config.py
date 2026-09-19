@@ -13,7 +13,9 @@ DATA_RAW_DIR = BASE_DIR / "data" / "raw"
 CHROMA_DB_DIR = BASE_DIR / "chroma_db"
 
 # Embedding Settings
-EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
+EMBEDDING_PROVIDER = "gemini"  # "gemini" or "bge"
+EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"  # Local BGE model
+GEMINI_EMBEDDING_MODEL = "gemini-embedding-001"  # Render fallback model
 
 # Chunking Parameters
 TARGET_CHUNK_SIZE = 900  # Tokens / characters approx target
@@ -23,7 +25,12 @@ TARGET_CHUNK_OVERLAP = 120  # Overlap
 INITIAL_TOP_K = 5
 # Strict distance threshold for BGE L2 distance: lower distance = higher similarity.
 # Chunks with distance > 0.85 are considered irrelevant / out of corpus context.
-SIMILARITY_THRESHOLD = 0.85
+BGE_SIMILARITY_THRESHOLD = 0.85
+GEMINI_SIMILARITY_THRESHOLD = None
+
+SIMILARITY_THRESHOLD = (
+    GEMINI_SIMILARITY_THRESHOLD if EMBEDDING_PROVIDER == "gemini" else BGE_SIMILARITY_THRESHOLD
+)
 
 # Generator LLM Settings (Gemini Flash Lite)
 LLM_MODEL_NAME = "gemini-3.5-flash-lite"
