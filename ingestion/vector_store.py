@@ -34,10 +34,15 @@ def get_embedding_function():
     Initializes and returns the BAAI/bge-base-en-v1.5 embedding model.
     """
     return HuggingFaceBgeEmbeddings(
-        model_name=config.EMBEDDING_MODEL_NAME,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True}
-    )
+    model_name=config.EMBEDDING_MODEL_NAME,
+    model_kwargs={
+        "device": "cpu"
+    },
+    encode_kwargs={
+        "normalize_embeddings": True,
+        "batch_size": 8
+    }
+)
 
 
 def get_vector_store():

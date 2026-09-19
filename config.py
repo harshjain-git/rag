@@ -13,7 +13,7 @@ DATA_RAW_DIR = BASE_DIR / "data" / "raw"
 CHROMA_DB_DIR = BASE_DIR / "chroma_db"
 
 # Embedding Settings
-EMBEDDING_MODEL_NAME = "BAAI/bge-base-en-v1.5"
+EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 
 # Chunking Parameters
 TARGET_CHUNK_SIZE = 900  # Tokens / characters approx target

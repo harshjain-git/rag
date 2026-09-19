@@ -11,7 +11,7 @@ pymupdf>=1.23.0
 # Vector Database & Embeddings
 chromadb>=0.4.22
 sentence-transformers>=2.5.0
-torch>=2.0.0
+torch==2.2.2
 
 # Generator LLM (Gemini 2.5 Flash)
 google-genai>=0.1.0
