@@ -66,8 +66,12 @@ class GeminiEmbeddings:
             for attempt in range(max_retries):
                 try:
                     response = self.client.models.embed_content(
-                        model=self.model,
-                        contents=batch
+    model=self.model,
+                        contents=batch,
+                        config={
+                            "output_dimensionality": 768,
+                            "task_type": "RETRIEVAL_DOCUMENT"
+                        }
                     )
                     for emb in response.embeddings:
                         all_embeddings.append(emb.values)
@@ -106,7 +110,11 @@ class GeminiEmbeddings:
         try:
             response = self.client.models.embed_content(
                 model=self.model,
-                contents=text
+                contents=text,
+                config={
+                    "output_dimensionality": 768,
+                    "task_type": "RETRIEVAL_QUERY"
+                }
             )
             return response.embeddings[0].values
         except Exception as e:
