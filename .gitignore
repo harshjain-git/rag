@@ -30,7 +30,6 @@ htmlcov/
 .ruff_cache/
 
 # --- Vector Database & Index Cache (Re-built on deployment) ---
-chroma_db/
 *.sqlite3
 *.sqlite3-journal
 

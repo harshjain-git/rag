@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(override=True)
 except ImportError:
     pass
 
