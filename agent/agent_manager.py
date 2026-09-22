@@ -23,15 +23,16 @@ class CadetAgentManager:
         """Registers a new LangChain tool with the agent manager."""
         self.tools.append(tool)
 
-    def run(self, query: str) -> Dict[str, Any]:
+    def run(self, query: str, history: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Executes the agent graph workflow for a user query.
-        In Step 3: Connects query -> LangChain retrieval tool -> Agent State with retrieved evidence.
+        Phase 8 Step 1: Resolves query using history -> LangChain retrieval tool -> Grounded Generation -> Verification.
         """
         cleaned_query = (query or "").strip()
         if not cleaned_query:
             return {
                 "query": "",
+                "resolved_query": "",
                 "evidence": [],
                 "tools_used": [],
                 "status": "EMPTY_QUERY"
@@ -41,6 +42,8 @@ class CadetAgentManager:
 
         initial_state = {
             "query": cleaned_query,
+            "resolved_query": None,
+            "history": history if history is not None else [],
             "evidence": [],
             "tools_used": [],
             "status": "START"
@@ -60,6 +63,10 @@ def get_agent_manager() -> CadetAgentManager:
     global _AGENT_MANAGER
     if _AGENT_MANAGER is None:
         from agent.retrieval_tool import get_retrieval_tool
-        _AGENT_MANAGER = CadetAgentManager(tools=[get_retrieval_tool()])
+        from agent.query_rewriter_tool import get_query_rewriter_tool
+        _AGENT_MANAGER = CadetAgentManager(tools=[
+            get_retrieval_tool(),
+            get_query_rewriter_tool()
+        ])
     return _AGENT_MANAGER
 

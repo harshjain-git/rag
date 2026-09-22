@@ -11,6 +11,10 @@ class AgentState(TypedDict, total=False):
     Schema for the LangChain Agent workflow state across all stages.
     """
     query: str
+    resolved_query: Optional[str]
+    resolution_action: Optional[str]
+    resolution_reason: Optional[str]
+    history: Optional[List[Dict[str, Any]]]
     evidence: List[Dict[str, Any]]
     tools_used: List[str]
     status: str
@@ -21,6 +25,8 @@ class AgentState(TypedDict, total=False):
     citations: Optional[List[Dict[str, Any]]]
     top_score: Optional[float]
     is_grounded: Optional[bool]
+    is_answerable: Optional[bool]
+    evidence_sufficient: Optional[bool]
     is_verified: Optional[bool]
     verification_status: Optional[str]
     verification_details: Optional[str]

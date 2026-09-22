@@ -209,18 +209,26 @@ if nav_selection == "💬 Ask Advisor":
 
     # 3. If there is a new query to process, run it and append to state
     if user_query:
+        # Capture conversation history prior to current turn
+        prior_history = list(st.session_state.messages)
         st.session_state.messages.append({"role": "user", "content": user_query})
-        with st.spinner("Executing LangChain Agent (Retrieval Tool → Grounded Generation → Fact Verification)..."):
+        with st.spinner("Executing LangChain Agent (Query Resolution → Retrieval Tool → Grounded Generation → Verification)..."):
             agent_mgr = get_agent_manager()
-            response_data = agent_mgr.run(user_query)
+            response_data = agent_mgr.run(user_query, history=prior_history)
 
         st.session_state.messages.append({
             "role": "assistant",
             "content": response_data.get("answer", ""),
+            "original_query": response_data.get("query", user_query),
+            "resolved_query": response_data.get("resolved_query"),
+            "resolution_action": response_data.get("resolution_action", "KEEP"),
+            "resolution_reason": response_data.get("resolution_reason", ""),
             "is_grounded": response_data.get("is_grounded", False),
+            "is_answerable": response_data.get("is_answerable", response_data.get("is_grounded", False)),
             "is_verified": response_data.get("is_verified", False),
             "verification_status": response_data.get("verification_status", ""),
             "verification_details": response_data.get("verification_details", ""),
+            "status": response_data.get("status", ""),
             "tools_used": response_data.get("tools_used", []),
             "top_score": response_data.get("top_score"),
             "evidence": response_data.get("evidence", [])
@@ -237,20 +245,23 @@ if nav_selection == "💬 Ask Advisor":
                 verification_status = msg.get("verification_status", "")
                 tools_used = msg.get("tools_used", [])
                 top_score = msg.get("top_score")
+                status_code = msg.get("status", "GROUNDED")
                 
-                # Grounding and Verification Badges
+                # Grounding / Answerability and Verification Badges
                 col_b1, col_b2 = st.columns([1, 1])
                 with col_b1:
                     if is_grounded:
                         score_txt = f" (Distance: {top_score:.4f})" if top_score is not None else ""
-                        st.markdown(f'<span class="status-badge-grounded">✅ GROUNDED IN CORPUS{score_txt}</span>', unsafe_allow_html=True)
+                        st.markdown(f'<span class="status-badge-grounded">✅ ANSWERABLE & GROUNDED{score_txt}</span>', unsafe_allow_html=True)
                     else:
-                        score_txt = f" (Top Distance: {top_score:.4f} > {config.SIMILARITY_THRESHOLD})" if top_score is not None else ""
-                        st.markdown(f'<span class="status-badge-not-corpus">⚠️ OUT OF CORPUS / INSUFFICIENT EVIDENCE{score_txt}</span>', unsafe_allow_html=True)
+                        score_txt = f" (Nearest Doc Distance: {top_score:.4f})" if top_score is not None else ""
+                        st.markdown(f'<span class="status-badge-not-corpus">⚠️ INSUFFICIENT EVIDENCE / NOT IN CORPUS{score_txt}</span>', unsafe_allow_html=True)
                 
                 with col_b2:
-                    if is_verified:
-                        st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: {verification_status}</span>', unsafe_allow_html=True)
+                    if verification_status == "REFUSAL_CONFIRMED":
+                        st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Refusal Confirmed</span>', unsafe_allow_html=True)
+                    elif is_verified:
+                        st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Factually Supported</span>', unsafe_allow_html=True)
                     elif verification_status:
                         st.markdown(f'<span class="status-badge-not-corpus">⚠️ VERIFICATION: {verification_status}</span>', unsafe_allow_html=True)
 
@@ -260,10 +271,33 @@ if nav_selection == "💬 Ask Advisor":
                 # Answer Text
                 st.markdown(msg["content"])
                 
-                # Retrieved Evidence Chunks Expander
+                # Retrieved Evidence Chunks & Query Analysis Expander
                 evidence_list = msg.get("evidence", [])
-                if evidence_list:
-                    with st.expander(f"🔍 Inspect Retrieved Chunks & IDs ({len(evidence_list)} chunks evaluated by agent)"):
+                resolved_q = msg.get("resolved_query")
+                orig_q = msg.get("original_query")
+                action = msg.get("resolution_action", "KEEP")
+                reason = msg.get("resolution_reason", "")
+                if evidence_list or resolved_q:
+                    with st.expander(f"🔍 Inspect Query Analysis & Retrieved Chunks ({len(evidence_list)} chunks evaluated by agent)"):
+                        if resolved_q:
+                            action_icon = "🟢" if action == "KEEP" else "🔄"
+                            st.markdown(f"##### 🎯 Query Resolution: {action_icon} `{action}`")
+                            st.markdown(f"- **Decision Reason**: {reason}")
+                            st.markdown(f"- **Original Query**: `{orig_q or 'N/A'}`")
+                            if action == "REWRITE":
+                                st.markdown(f"- **Reformulated Retrieval Query**: `{resolved_q}`")
+                            st.divider()
+
+                        # Retrieval & Answerability Overview
+                        st.markdown("##### 📊 Retrieval & Answerability Overview")
+                        st.markdown(f"- **Retrieval Query**: `{resolved_q or orig_q}`")
+                        st.markdown(f"- **Answerability Status**: `{'ANSWERABLE (GROUNDED)' if is_grounded else 'INSUFFICIENT_EVIDENCE'}`")
+                        if top_score is not None:
+                            st.markdown(f"- **Nearest Chunk Distance**: `{top_score:.4f}`")
+                        st.markdown(f"- **Retrieved Chunks Count**: `{len(evidence_list)} chunks`")
+                        st.divider()
+
+                        st.markdown("##### 📄 Retrieved Evidence Chunks (Debug)")
                         for idx, chunk in enumerate(evidence_list, 1):
                             st.markdown(f"**Chunk #{idx}** — `ID: {chunk.get('chunk_id', 'N/A')}`")
                             st.caption(f"📄 Source: **{chunk.get('source')}** | Page: **{chunk.get('page')}** | Distance: **{chunk.get('score', 0):.4f}**")

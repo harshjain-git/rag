@@ -50,38 +50,38 @@ def verify_grounding(query: str, raw_answer: str, evidence: List[Dict[str, Any]]
             "verification_details": "Query or answer is empty."
         }
 
-    # If no evidence was retrieved (out of corpus refusal)
-    if not evidence:
+    # Check if answer is a refusal due to insufficient evidence
+    refusal_markers = [
+        "not in corpus",
+        "not contain enough information",
+        "do not contain enough facts",
+        "does not contain information",
+        "cannot be answered using the provided",
+        "no information provided",
+        "not mentioned in the provided",
+        "not found in the provided"
+    ]
+    is_refusal = not evidence or any(m in raw_answer.strip().lower() for m in refusal_markers)
+
+    if is_refusal:
         return {
             "is_verified": True,
-            "verification_status": "REFUSAL_VERIFIED",
-            "verification_details": "Response is a verified out-of-corpus refusal."
+            "verification_status": "REFUSAL_CONFIRMED",
+            "verification_details": "Verified refusal: Retrieved documents do not contain sufficient facts to answer this question."
         }
 
-    # Format evidence excerpts for verification judge
-    evidence_text = "\n\n".join(
-        f"[Doc: {c.get('source', 'unknown')} | P.{c.get('page', 1)}]: {c.get('text', '')}"
-        for c in evidence
-    )
+    from agent.prompts import build_verification_messages, messages_to_gemini_args
 
-    prompt = f"""USER QUESTION:
-{query}
-
-RETRIEVED EVIDENCE CHUNKS:
-{evidence_text}
-
-GENERATED ANSWER:
-{raw_answer}
-
-JSON VERIFICATION:"""
+    messages = build_verification_messages(query=query, raw_answer=raw_answer, evidence=evidence)
+    system_instruction, contents = messages_to_gemini_args(messages)
 
     client = get_gemini_client()
     try:
         response = client.models.generate_content(
             model=config.LLM_MODEL_NAME,
-            contents=prompt,
+            contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=VERIFICATION_SYSTEM_PROMPT,
+                system_instruction=system_instruction,
                 temperature=0.0,
                 response_mime_type="application/json",
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)

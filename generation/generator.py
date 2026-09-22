@@ -40,16 +40,10 @@ def get_gemini_client() -> genai.Client:
     return _LLM_CLIENT
 
 
-# Strict Grounded System Prompt
-SYSTEM_PROMPT = """You are the Cadet Readiness Advisor assistant.
-Your task is to answer user questions using ONLY the provided document evidence chunks below.
+from agent.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
 
-STRICT GROUNDING RULES:
-1. Rely EXCLUSIVELY on the provided document excerpts. Do NOT use external knowledge, prior training data, or external assumptions.
-2. Be factual, concise, and clear.
-3. If the provided excerpts do not contain enough facts to answer the question, state exactly:
-"Not in corpus — the provided documents do not contain enough information to answer this question."
-"""
+# Strict Grounded System Prompt (Centralized)
+SYSTEM_PROMPT = CADET_ADVISOR_BASE_INSTRUCTIONS
 
 # Natural Refusal System Prompt for Out-of-Corpus Queries
 REFUSAL_SYSTEM_PROMPT = """You are the Cadet Readiness Advisor reference assistant.
