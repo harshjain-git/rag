@@ -11,6 +11,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import warnings
 import logging
+from typing import Any, Dict, List, Optional
 
 # Suppress noisy deprecation & genai warnings
 warnings.filterwarnings("ignore")
