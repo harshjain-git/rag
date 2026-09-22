@@ -25,25 +25,30 @@ class CadetAgentManager:
 
     def run(self, query: str) -> Dict[str, Any]:
         """
-        Baseline agent execution runner.
-        In Step 1: Validates query, reports registered tools, and returns initial structured output.
-        Subsequent steps will attach the retrieval tool and executor.
+        Executes the agent graph workflow for a user query.
+        In Step 3: Connects query -> LangChain retrieval tool -> Agent State with retrieved evidence.
         """
         cleaned_query = (query or "").strip()
         if not cleaned_query:
             return {
                 "query": "",
-                "answer": "No query provided.",
+                "evidence": [],
                 "tools_used": [],
                 "status": "EMPTY_QUERY"
             }
 
-        return {
+        from agent.chain import get_agent_pipeline
+
+        initial_state = {
             "query": cleaned_query,
-            "answer": "Agent foundation initialized. Ready for tool integration.",
-            "tools_used": [t.name for t in self.tools],
-            "status": "INITIALIZED"
+            "evidence": [],
+            "tools_used": [],
+            "status": "START"
         }
+
+        pipeline = get_agent_pipeline()
+        result_state = pipeline.invoke(initial_state)
+        return result_state
 
 
 # Singleton manager instance for the application
@@ -51,8 +56,10 @@ _AGENT_MANAGER = None
 
 
 def get_agent_manager() -> CadetAgentManager:
-    """Returns a singleton instance of CadetAgentManager."""
+    """Returns a singleton instance of CadetAgentManager with registered tools."""
     global _AGENT_MANAGER
     if _AGENT_MANAGER is None:
-        _AGENT_MANAGER = CadetAgentManager()
+        from agent.retrieval_tool import get_retrieval_tool
+        _AGENT_MANAGER = CadetAgentManager(tools=[get_retrieval_tool()])
     return _AGENT_MANAGER
+

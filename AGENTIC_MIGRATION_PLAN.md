@@ -24,7 +24,7 @@ The migration must be performed one step at a time.
 10. After completing each step, explain exactly what changed and STOP.
 11. Wait for explicit user approval before starting the next step.
 12. If a proposed change could affect existing behavior, explain the risk before making it.
-13. Use the current official LangChain documentation and recommended APIs as the implementation reference, especially for LangGraph and Deep Agents; do not invent or use outdated agent/tool patterns when an official approach exists.
+13. Use the current official LangChain documentation and recommended APIs as the implementation reference (pure LangChain tools, agents, and runnables without LangGraph); do not invent or use outdated agent/tool patterns when an official approach exists.
 
 ## Target Architecture
 
@@ -56,7 +56,7 @@ Create the basic agentic structure.
 - Do NOT replace the existing application flow yet.
 - Do NOT modify retrieval or generation logic.
 
-Status: CURRENT
+Status: COMPLETED
 
 ### Step 2 — Existing Retrieval as a Tool
 
@@ -68,7 +68,7 @@ Take the existing retrieval functionality and expose it as an agent tool.
 - Do not change retrieval behavior unnecessarily.
 - Test that the tool returns the same evidence as the existing retrieval pipeline.
 
-Status: NOT STARTED
+Status: COMPLETED
 
 ### Step 3 — Connect Retrieval Tool to the Agent
 
@@ -79,7 +79,7 @@ Connect the retrieval tool to the agent/graph.
 - Retrieved evidence is placed into the agent state.
 - Do not change answer generation yet.
 
-Status: NOT STARTED
+Status: COMPLETED
 
 ### Step 4 — Connect Existing Generation
 
@@ -90,7 +90,7 @@ Connect the existing Gemini generation logic to the agentic workflow.
 - Preserve current grounded-answer behavior.
 - The agent should use retrieved evidence to generate the answer.
 
-Status: NOT STARTED
+Status: COMPLETED
 
 ### Step 5 — Add Verification / Grounding Node
 
@@ -100,7 +100,7 @@ Add a separate verification stage after generation.
 - Do not invent missing evidence.
 - Keep this isolated from the existing retrieval implementation.
 
-Status: NOT STARTED
+Status: COMPLETED
 
 ### Step 6 — Connect the Agentic Workflow to Streamlit
 
@@ -110,7 +110,7 @@ Only after the agentic pipeline works independently:
 - Preserve the existing UI behavior as much as possible.
 - Replace the old direct pipeline only after the new pipeline is tested.
 
-Status: NOT STARTED
+Status: COMPLETED
 
 ### Step 7 — Regression Testing
 
@@ -126,7 +126,7 @@ Test:
 
 The agentic migration should not silently reduce existing functionality.
 
-Status: NOT STARTED
+Status: COMPLETED
 
 ### Step 8+ — Future Capabilities
 
@@ -151,12 +151,19 @@ Completed:
 - Existing RAG application
 - Existing Chroma retrieval
 - Existing Gemini integration
+- Step 1 — Agentic Foundation
+- Step 2 — Existing Retrieval as a Tool
+- Step 3 — Connect Retrieval Tool to the Agent
+- Step 4 — Connect Existing Generation
+- Step 5 — Add Verification / Grounding Node
+- Step 6 — Connect the Agentic Workflow to Streamlit
+- Step 7 — Regression Testing
 
 Current step:
-- Step 1 — Agentic Foundation
+- Completed (Core Migration Finished)
 
 Next step:
-- Step 2 — Existing Retrieval as a Tool
+- Step 8+ — Future Capabilities (Optional future extensions)
 
 Do not implement the next step automatically.
 

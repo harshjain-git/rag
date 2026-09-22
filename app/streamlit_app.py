@@ -33,7 +33,7 @@ import pymupdf
 
 import config
 from retrieval.retriever import get_cached_vector_store
-from generation.generator import generate_answer
+from agent import get_agent_manager
 
 # --- Streamlit Page Setup ---
 st.set_page_config(
@@ -148,6 +148,8 @@ with st.sidebar:
 
     st.markdown("### ⚙️ Pipeline Specifications")
     st.markdown(f"""
+    - **Architecture**: `LangChain Agentic Pipeline`
+    - **Orchestration**: `LCEL Runnable Sequence`
     - **LLM**: `{config.LLM_MODEL_NAME}`
     - **Embeddings**: `bge-base-en-v1.5`
     - **Similarity Threshold**: `≤ {config.SIMILARITY_THRESHOLD}`
@@ -208,13 +210,18 @@ if nav_selection == "💬 Ask Advisor":
     # 3. If there is a new query to process, run it and append to state
     if user_query:
         st.session_state.messages.append({"role": "user", "content": user_query})
-        with st.spinner("Retrieving evidence from ChromaDB and querying Gemini Flash Lite..."):
-            response_data = generate_answer(user_query)
+        with st.spinner("Executing LangChain Agent (Retrieval Tool → Grounded Generation → Fact Verification)..."):
+            agent_mgr = get_agent_manager()
+            response_data = agent_mgr.run(user_query)
 
         st.session_state.messages.append({
             "role": "assistant",
             "content": response_data.get("answer", ""),
             "is_grounded": response_data.get("is_grounded", False),
+            "is_verified": response_data.get("is_verified", False),
+            "verification_status": response_data.get("verification_status", ""),
+            "verification_details": response_data.get("verification_details", ""),
+            "tools_used": response_data.get("tools_used", []),
             "top_score": response_data.get("top_score"),
             "evidence": response_data.get("evidence", [])
         })
@@ -226,23 +233,37 @@ if nav_selection == "💬 Ask Advisor":
                 st.write(msg["content"])
             else:
                 is_grounded = msg.get("is_grounded", False)
+                is_verified = msg.get("is_verified", False)
+                verification_status = msg.get("verification_status", "")
+                tools_used = msg.get("tools_used", [])
                 top_score = msg.get("top_score")
                 
-                # Grounding Badge
-                if is_grounded:
-                    score_txt = f" (Distance: {top_score:.4f})" if top_score is not None else ""
-                    st.markdown(f'<span class="status-badge-grounded">✅ GROUNDED IN CORPUS{score_txt}</span>', unsafe_allow_html=True)
-                else:
-                    score_txt = f" (Top Distance: {top_score:.4f} > {config.SIMILARITY_THRESHOLD})" if top_score is not None else ""
-                    st.markdown(f'<span class="status-badge-not-corpus">⚠️ OUT OF CORPUS / INSUFFICIENT EVIDENCE{score_txt}</span>', unsafe_allow_html=True)
+                # Grounding and Verification Badges
+                col_b1, col_b2 = st.columns([1, 1])
+                with col_b1:
+                    if is_grounded:
+                        score_txt = f" (Distance: {top_score:.4f})" if top_score is not None else ""
+                        st.markdown(f'<span class="status-badge-grounded">✅ GROUNDED IN CORPUS{score_txt}</span>', unsafe_allow_html=True)
+                    else:
+                        score_txt = f" (Top Distance: {top_score:.4f} > {config.SIMILARITY_THRESHOLD})" if top_score is not None else ""
+                        st.markdown(f'<span class="status-badge-not-corpus">⚠️ OUT OF CORPUS / INSUFFICIENT EVIDENCE{score_txt}</span>', unsafe_allow_html=True)
                 
+                with col_b2:
+                    if is_verified:
+                        st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: {verification_status}</span>', unsafe_allow_html=True)
+                    elif verification_status:
+                        st.markdown(f'<span class="status-badge-not-corpus">⚠️ VERIFICATION: {verification_status}</span>', unsafe_allow_html=True)
+
+                if tools_used:
+                    st.caption(f"🔧 **Tools Executed**: `{'`, `'.join(tools_used)}`")
+
                 # Answer Text
                 st.markdown(msg["content"])
                 
                 # Retrieved Evidence Chunks Expander
                 evidence_list = msg.get("evidence", [])
                 if evidence_list:
-                    with st.expander(f"🔍 Inspect Retrieved Chunks & IDs ({len(evidence_list)} chunks sent to LLM)"):
+                    with st.expander(f"🔍 Inspect Retrieved Chunks & IDs ({len(evidence_list)} chunks evaluated by agent)"):
                         for idx, chunk in enumerate(evidence_list, 1):
                             st.markdown(f"**Chunk #{idx}** — `ID: {chunk.get('chunk_id', 'N/A')}`")
                             st.caption(f"📄 Source: **{chunk.get('source')}** | Page: **{chunk.get('page')}** | Distance: **{chunk.get('score', 0):.4f}**")
