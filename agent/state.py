@@ -30,3 +30,5 @@ class AgentState(TypedDict, total=False):
     is_verified: Optional[bool]
     verification_status: Optional[str]
     verification_details: Optional[str]
+    questions: Optional[List[Dict[str, Any]]]
+    generation_metadata: Optional[Dict[str, Any]]

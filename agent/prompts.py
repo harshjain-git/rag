@@ -19,76 +19,62 @@ import config
 # =============================================================================
 
 CADET_ADVISOR_BASE_INSTRUCTIONS = """You are the Cadet Readiness Advisor reference assistant.
-Your task is to provide grounded, psychometrically accurate, and objective information
-concerning military psychology, psychological readiness, ASVAB/aptitude testing, and APA assessment standards.
+Strictly grounded in corpus PDFs covering: APA Assessment Standards, ASVAB Norms/Scores, and Military Psychology.
 
-CORPUS DOMAIN:
-The assistant's knowledge base is strictly limited to the 7 reference PDF documents:
-1. APA Psychometric Evaluation Standards & Guidelines (apa1.pdf, apa2.pdf, apa3.pdf)
-2. ASVAB Technical Manuals, Composite Scores & Norms (asvab1.pdf, asvab2.pdf)
-3. Military Psychology & Operational Readiness Research (military_psyc1.pdf, military_psyc2.pdf)
+RULES:
+1. Rely EXCLUSIVELY on provided corpus excerpts. Never use external knowledge or invent citations.
+2. ZERO-HALLUCINATION REFUSAL: If excerpts lack sufficient evidence, politely state you cannot answer based on reference documents, and offer help on covered topics (ASVAB, psychometrics, readiness).
 
-STRICT GROUNDING RULES:
-1. Rely EXCLUSIVELY on the provided document excerpts. Do NOT use external knowledge, prior training data, or external assumptions.
-2. Be factual, concise, and precise. Never invent numbers, facts, or citations.
-3. ZERO-HALLUCINATION REFUSAL RULE: If the provided excerpts do not contain enough facts to answer the question, state exactly:
-   "Not in corpus — the provided documents do not contain enough information to answer this question."
-
-TOOL CATALOG & CAPABILITIES:
-The agent architecture orchestrates the following current and planned tools:
-- `retrieve_corpus_evidence` [ACTIVE]: Performs dense semantic retrieval across the 7 corpus PDFs.
-- `query_rewriter` [ACTIVE]: Evaluates conversation context to decide KEEP vs REWRITE for standalone search.
-- `summarize_corpus_document` [PLANNED]: Generates structured summaries of specific corpus documents.
-- `generate_corpus_questions` [PLANNED]: Formulates assessment questions grounded in corpus material.
-- `compare_corpus_documents` [PLANNED]: Performs comparative cross-document analysis across domains.
-"""
+ACTIVE TOOLS:
+- `retrieve_corpus_evidence`: Semantic search for factual/conceptual questions.
+- `generate_corpus_questions`: Generates assessment/practice questions grounded in corpus chunks.
+- `query_rewriter`: Resolves ambiguous conversational follow-ups into standalone queries."""
 
 # =============================================================================
-# 2. TASK-SPECIFIC INSTRUCTION DIRECTIVES
+# 2. TASK-SPECIFIC INSTRUCTION DIRECTIVES (LEAN & TOKEN-EFFICIENT)
 # =============================================================================
 
-QUERY_RESOLUTION_DIRECTIVES = """
-TASK DIRECTIVE: QUERY RESOLUTION & RETRIEVAL FORMULATION
-Analyze the user's latest query in the context of recent conversation history and decide whether to KEEP the query as-is or REWRITE it into an effective standalone retrieval query.
+QUERY_RESOLUTION_DIRECTIVES = """TASK: QUERY RESOLUTION
+Decide KEEP (query is clear standalone) or REWRITE (query has ambiguous pronouns/ellipsis needing chat history).
+Output JSON:
+{"action": "KEEP" | "REWRITE", "query": "<standalone query>", "reason": "<brief reason>"}"""
 
-DECISION CRITERIA:
-1. "KEEP":
-   - The query is already a clear, self-contained question (e.g., "What is psychometric evaluation?", "What are the components of the ASVAB?").
-   - The query is clear even if conversation history exists, provided it does NOT depend on prior context to be understood.
-   - If action is "KEEP", the "query" field MUST be exactly identical to the original user query.
+VERIFICATION_DIRECTIVES = """TASK: FACT VERIFICATION
+Check if the generated answer is completely supported by the provided excerpts.
+Output JSON:
+{"is_supported": true | false, "explanation": "<brief rationale>"}"""
 
-2. "REWRITE":
-   - Conversational / Ambiguous follow-ups: Contains pronouns ("it", "this", "that", "these", "those", "them") or conversational ellipsis ("tell me more about it", "why is it important?", "how is it measured?"). Rewrite by replacing ambiguous references with the specific topic from recent conversation history.
-   - Short, vague, or keyword-style queries: Very brief keyword queries (e.g., "ASVAB", "reliability", "military rules", "leadership assessment") that benefit from being formulated into a clear retrieval inquiry.
+QUESTION_GENERATION_DIRECTIVES = """TASK: QUESTION GENERATION
+Generate assessment questions grounded strictly in the provided excerpts.
+Every question must have a factual answer and cite the exact 'grounding_chunk_id' from the excerpts.
+Output JSON array:
+[{"question": "...", "answer": "...", "difficulty": "basic"|"intermediate"|"advanced", "question_type": "conceptual"|"definition"|"application"|"scenario"|"comparison"|"factual", "grounding_chunk_id": "<exact_id>"}]"""
 
-STRICT CONSTRAINTS:
-- DO NOT INVENT UNSUPPORTED CONCEPTS: When expanding short keywords, do not guess specific subtopics. Improve retrieval formulation without guessing user intent.
-- DO NOT ANSWER THE QUESTION: You are solely deciding and formulating the search query.
-- DO NOT FILTER FOR CORPUS PRESENCE: Do NOT judge whether a topic is inside or outside the reference documents. Downstream retrieval handles evidence evaluation.
+QUESTION_BATCH_VERIFICATION_DIRECTIVES = """TASK: BATCH QUESTION VERIFICATION
+Verify each candidate question is strictly supported and answerable by its assigned grounding chunk text.
+Output JSON:
+{"verdicts": [{"index": 0, "is_valid": true | false, "reason": "..."}]}"""
 
-OUTPUT FORMAT:
-Respond with valid JSON adhering to this schema:
-{
-  "action": "KEEP" | "REWRITE",
-  "query": "<final retrieval query>",
-  "reason": "<brief explanation of the decision>"
-}
-"""
+ORCHESTRATOR_SYSTEM_PROMPT = f"""{CADET_ADVISOR_BASE_INSTRUCTIONS}
 
-VERIFICATION_DIRECTIVES = """
-TASK DIRECTIVE: FACT VERIFICATION & GROUNDING ASSESSMENT
-Your job is to check whether a GENERATED ANSWER is completely supported by the provided RETRIEVED EVIDENCE CHUNKS.
+TASK: ORCHESTRATION DECISION
+Analyze user input and decide tool or direct response.
+Tools:
+- `generate_corpus_questions`: for creating questions, quizzes, practice items (args: num_questions, scope, domains, documents, difficulty).
+- `retrieve_corpus_evidence`: for factual/conceptual reference questions (args: query).
+- `query_rewriter`: for ambiguous pronoun/follow-up queries needing history (args: query).
 
-CRITERIA:
-1. SUPPORTED: All key facts, metrics, numbers, and definitions in the answer are directly mentioned or clearly entailed in the evidence chunks.
-2. UNSUPPORTED: The answer introduces new external facts, claims, or contradicts the provided excerpts.
+DIRECT RESPONSE RULE:
+- If the user asks for answers, solutions, explanations, or follow-ups to previously generated questions in the conversation history (e.g. "give also the answer", "answer question 2", "show the solutions"), DO NOT use retrieval. Set "action": "direct_response" and provide the answers clearly in "direct_answer".
 
-Respond ONLY with a valid JSON object in this exact schema:
-{
-  "is_supported": true | false,
-  "explanation": "Brief explanation of grounding assessment"
-}
-"""
+Output JSON:
+{{"action": "call_tool" | "direct_response", "tool_name": "generate_corpus_questions" | "retrieve_corpus_evidence" | "query_rewriter" | null, "arguments": {{...}}, "direct_answer": "<text if direct_response else null>", "reason": "..."}}"""
+
+
+
+GENERATION_DIRECTIVES = """TASK: GROUNDED ANSWER GENERATION
+1. If excerpts contain sufficient facts: {"is_answerable": true, "answer": "<factual answer grounded ONLY in excerpts>"}
+2. If excerpts lack sufficient facts: {"is_answerable": false, "answer": "<polite refusal naming topic and offering help on ASVAB/psychometrics/readiness>"}"""
 
 
 # =============================================================================
@@ -104,11 +90,17 @@ def format_conversation_context(history: Optional[List[Dict[str, Any]]], max_tur
     for msg in recent_turns:
         role = msg.get("role", "user").capitalize()
         content = msg.get("content", "").strip()
-        if role == "Assistant" and len(content) > 300:
-            content = content[:300] + "..."
-        if content:
-            lines.append(f"{role}: {content}")
+        q_list = msg.get("questions", [])
+        if q_list and role == "Assistant":
+            q_str = "\n".join(f"Q{i}: {q.get('question')} | Answer: {q.get('answer')}" for i, q in enumerate(q_list[:5], 1))
+            lines.append(f"{role}: {content}\n{q_str}")
+        else:
+            if role == "Assistant" and len(content) > 300:
+                content = content[:300] + "..."
+            if content:
+                lines.append(f"{role}: {content}")
     return "\n".join(lines) if lines else "No previous conversation context."
+
 
 
 def get_base_system_message() -> SystemMessage:
@@ -120,32 +112,21 @@ def build_query_resolution_messages(
     query: str,
     history: Optional[List[Dict[str, Any]]] = None
 ) -> List[BaseMessage]:
-    """
-    Constructs LangChain messages for the single-call query resolution step.
-    SystemMessage contains base instructions + query resolution directives.
-    Conversation history is rendered as alternating HumanMessage and AIMessage.
-    Latest user input is rendered as HumanMessage.
-    """
-    sys_content = f"{CADET_ADVISOR_BASE_INSTRUCTIONS}\n\n{QUERY_RESOLUTION_DIRECTIVES}"
-    messages: List[BaseMessage] = [SystemMessage(content=sys_content)]
+    """Single-call query resolution: checks for ambiguous pronouns/ellipsis."""
+    messages: List[BaseMessage] = [SystemMessage(content=QUERY_RESOLUTION_DIRECTIVES)]
 
-    # Include recent dialogue turns as HumanMessage / AIMessage
     if history:
-        recent_turns = history[-4:]
-        for turn in recent_turns:
+        for turn in history[-4:]:
             role = turn.get("role", "user")
             content = turn.get("content", "").strip()
             if role == "user":
                 messages.append(HumanMessage(content=content))
             else:
-                # Truncate lengthy assistant replies to keep context window focused
-                if len(content) > 300:
-                    content = content[:300] + "..."
+                if len(content) > 200:
+                    content = content[:200] + "..."
                 messages.append(AIMessage(content=content))
 
-    # Add the current user query requiring evaluation
-    prompt_text = f"Analyze this latest query and output your decision JSON:\n\nLATEST USER QUERY: {query.strip()}"
-    messages.append(HumanMessage(content=prompt_text))
+    messages.append(HumanMessage(content=f"LATEST QUERY: {query.strip()}"))
     return messages
 
 
@@ -154,29 +135,18 @@ def build_generation_messages(
     evidence: List[Dict[str, Any]],
     history: Optional[List[Dict[str, Any]]] = None
 ) -> List[BaseMessage]:
-    """
-    Constructs LangChain messages for grounded answer generation.
-    SystemMessage contains base grounding rules.
-    Retrieved evidence chunks are formatted cleanly for Gemini context ingestion.
-    """
-    sys_content = (
-        f"{CADET_ADVISOR_BASE_INSTRUCTIONS}\n\n"
-        "GENERATION DIRECTIVES:\n"
-        "1. Answer the user question using ONLY the provided document evidence excerpts.\n"
-        "2. If the excerpts do not contain enough facts to answer, output the exact refusal message.\n"
-        "3. Do not include external facts or speculations."
-    )
+    """Constructs messages for grounded answer generation."""
+    sys_content = f"{CADET_ADVISOR_BASE_INSTRUCTIONS}\n\n{GENERATION_DIRECTIVES}"
     messages: List[BaseMessage] = [SystemMessage(content=sys_content)]
 
-    # Format evidence excerpts into the context block
-    context_str = "RETRIEVED DOCUMENT EXCERPTS:\n\n"
+    context_str = "EXCERPTS:\n\n"
     for idx, chunk in enumerate(evidence, 1):
         source = chunk.get("source", "unknown.pdf")
         page = chunk.get("page", 1)
         text = chunk.get("text", "").strip()
-        context_str += f"--- Excerpt #{idx} (Document: {source} | Page: {page}) ---\n{text}\n\n"
+        context_str += f"[{source} p.{page}]: {text}\n\n"
 
-    human_content = f"{context_str}USER QUESTION: {query.strip()}\n\nANSWER:"
+    human_content = f"{context_str}QUESTION: {query.strip()}"
     messages.append(HumanMessage(content=human_content))
     return messages
 
@@ -186,30 +156,101 @@ def build_verification_messages(
     raw_answer: str,
     evidence: List[Dict[str, Any]]
 ) -> List[BaseMessage]:
-    """
-    Constructs LangChain messages for factual grounding verification.
-    """
-    sys_content = f"{CADET_ADVISOR_BASE_INSTRUCTIONS}\n\n{VERIFICATION_DIRECTIVES}"
-    messages: List[BaseMessage] = [SystemMessage(content=sys_content)]
+    """Constructs messages for factual grounding verification."""
+    messages: List[BaseMessage] = [SystemMessage(content=VERIFICATION_DIRECTIVES)]
 
     evidence_text = "\n\n".join(
-        f"[Doc: {c.get('source', 'unknown')} | P.{c.get('page', 1)}]: {c.get('text', '')}"
+        f"[{c.get('source', 'unknown')} p.{c.get('page', 1)}]: {c.get('text', '')}"
         for c in evidence
     )
 
-    human_content = f"""USER QUESTION:
-{query.strip()}
-
-RETRIEVED EVIDENCE CHUNKS:
-{evidence_text}
-
-GENERATED ANSWER:
-{raw_answer.strip()}
-
-JSON VERIFICATION:"""
-
+    human_content = f"QUESTION: {query.strip()}\n\nEXCERPTS:\n{evidence_text}\n\nANSWER:\n{raw_answer.strip()}"
     messages.append(HumanMessage(content=human_content))
     return messages
+
+
+def build_question_generation_messages(
+    evidence_pack: List[Dict[str, Any]],
+    num_questions: int = 5,
+    difficulty: str = "mixed",
+    question_types: Optional[List[str]] = None
+) -> List[BaseMessage]:
+    """Constructs messages for batch question generation."""
+    sys_content = f"{CADET_ADVISOR_BASE_INSTRUCTIONS}\n\n{QUESTION_GENERATION_DIRECTIVES}"
+    messages: List[BaseMessage] = [SystemMessage(content=sys_content)]
+
+    excerpts = []
+    for idx, c in enumerate(evidence_pack, 1):
+        cid = c.get("chunk_id", f"chunk_{idx}")
+        src = c.get("source", "unknown.pdf")
+        page = c.get("page", 1)
+        text = c.get("text", "").strip()
+        excerpts.append(f"[{cid} | {src} p.{page}]: {text}")
+
+    evidence_text = "\n\n".join(excerpts)
+    q_types_str = ", ".join(question_types) if question_types else "conceptual, definition, application"
+
+    prompt_text = f"EXCERPTS:\n{evidence_text}\n\nINSTRUCTION: Generate {num_questions} questions. Difficulty: {difficulty}. Types: {q_types_str}."
+    messages.append(HumanMessage(content=prompt_text))
+    return messages
+
+
+def build_question_verification_messages(
+    candidates: List[Dict[str, Any]],
+    evidence_pack: List[Dict[str, Any]]
+) -> List[BaseMessage]:
+    """Constructs messages for batch question grounding verification."""
+    import json
+    messages: List[BaseMessage] = [SystemMessage(content=QUESTION_BATCH_VERIFICATION_DIRECTIVES)]
+
+    chunk_map = {c.get("chunk_id", ""): c.get("text", "") for c in evidence_pack}
+    verification_items = []
+    for idx, cand in enumerate(candidates):
+        cid = cand.get("grounding_chunk_id", "")
+        chunk_content = chunk_map.get(cid, "ERROR: CHUNK NOT FOUND")
+        verification_items.append({
+            "index": idx,
+            "question": cand.get("question", ""),
+            "answer": cand.get("answer", ""),
+            "chunk_id": cid,
+            "chunk_text": chunk_content
+        })
+
+    prompt_text = f"CANDIDATES TO VERIFY:\n{json.dumps(verification_items, indent=2)}"
+    messages.append(HumanMessage(content=prompt_text))
+    return messages
+
+
+def build_orchestrator_decision_messages(
+    query: str,
+    history: Optional[List[Dict[str, Any]]] = None
+) -> List[BaseMessage]:
+    """
+    Constructs LangChain messages for the autonomous Orchestrator decision.
+    """
+    messages: List[BaseMessage] = [SystemMessage(content=ORCHESTRATOR_SYSTEM_PROMPT)]
+
+    if history:
+        recent = history[-4:]
+        for msg in recent:
+            role = msg.get("role", "user")
+            content = msg.get("content", "").strip()
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            else:
+                q_list = msg.get("questions", [])
+                if q_list:
+                    q_str = "\n".join(f"Q{i}: {q.get('question')}\nAnswer: {q.get('answer')}" for i, q in enumerate(q_list[:5], 1))
+                    messages.append(AIMessage(content=f"{content}\n\nGENERATED QUESTIONS & ANSWERS:\n{q_str}"))
+                else:
+                    if len(content) > 300:
+                        content = content[:300] + "..."
+                    messages.append(AIMessage(content=content))
+
+    prompt_text = f"USER INPUT: {query.strip()}\n\nDECISION JSON:"
+    messages.append(HumanMessage(content=prompt_text))
+    return messages
+
 
 
 # =============================================================================

@@ -64,9 +64,11 @@ def get_agent_manager() -> CadetAgentManager:
     if _AGENT_MANAGER is None:
         from agent.retrieval_tool import get_retrieval_tool
         from agent.query_rewriter_tool import get_query_rewriter_tool
+        from agent.question_generator_tool import get_question_generator_tool
         _AGENT_MANAGER = CadetAgentManager(tools=[
             get_retrieval_tool(),
-            get_query_rewriter_tool()
+            get_query_rewriter_tool(),
+            get_question_generator_tool()
         ])
     return _AGENT_MANAGER
 

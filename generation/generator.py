@@ -45,37 +45,47 @@ from agent.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
 # Strict Grounded System Prompt (Centralized)
 SYSTEM_PROMPT = CADET_ADVISOR_BASE_INSTRUCTIONS
 
-# Natural Refusal System Prompt for Out-of-Corpus Queries
-REFUSAL_SYSTEM_PROMPT = """You are the Cadet Readiness Advisor reference assistant.
-The user asked a question that cannot be answered because the reference documents in this corpus do not contain relevant information.
 
-The corpus is strictly limited to:
-- APA Psychometric standards & measurement theory
-- ASVAB test battery, composite scores, and qualification norms
-- Military psychology, operational readiness, and mental toughness assessments
-
-INSTRUCTIONS:
-1. Politely inform the user that you cannot answer their question because the provided reference documents do not contain information on their requested topic.
-2. Explicitly reference the user's specific topic or question so the refusal is natural, conversational, and helpful.
-3. Briefly mention what domains your corpus actually covers (ASVAB, psychometrics, military psychological readiness).
-4. STRICT ZERO-HALLUCINATION CONSTRAINT: Do NOT attempt to answer the user's question, provide facts or definitions from your own training data, or speculate on things outside the corpus.
-"""
-
+def generate_structured_json(
+    contents: str,
+    system_instruction: str = "",
+    temperature: float = 0.0
+) -> Any:
+    """
+    Executes a structured JSON generation call to Gemini and parses the response safely.
+    Centralized helper reused across orchestrator, query rewriter, verification, and question generation.
+    """
+    import json
+    client = get_gemini_client()
+    response = client.models.generate_content(
+        model=config.LLM_MODEL_NAME,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=temperature,
+            response_mime_type="application/json",
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+        )
+    )
+    raw_text = response.text.strip() if hasattr(response, "text") and response.text else "{}"
+    return json.loads(raw_text)
 
 def generate_natural_refusal(query: str) -> str:
     """
     Generates a polite, context-aware refusal using Gemini Flash Lite
     when a question is out of corpus, explaining why it cannot be answered.
     """
+    from agent.prompts import build_generation_messages, messages_to_gemini_args
     client = get_gemini_client()
-    refusal_prompt = f"USER QUESTION: {query}\n\nPOLITE REFUSAL:"
+    messages = build_generation_messages(query=query, evidence=[])
+    system_instruction, contents = messages_to_gemini_args(messages)
 
     try:
         response = client.models.generate_content(
             model=config.LLM_MODEL_NAME,
-            contents=refusal_prompt,
+            contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=REFUSAL_SYSTEM_PROMPT,
+                system_instruction=system_instruction,
                 temperature=0.0,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
             )

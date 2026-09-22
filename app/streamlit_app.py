@@ -33,7 +33,7 @@ import pymupdf
 
 import config
 from retrieval.retriever import get_cached_vector_store
-from agent import get_agent_manager
+from agent.agent_manager import get_agent_manager
 
 # --- Streamlit Page Setup ---
 st.set_page_config(
@@ -231,7 +231,9 @@ if nav_selection == "💬 Ask Advisor":
             "status": response_data.get("status", ""),
             "tools_used": response_data.get("tools_used", []),
             "top_score": response_data.get("top_score"),
-            "evidence": response_data.get("evidence", [])
+            "evidence": response_data.get("evidence", []),
+            "questions": response_data.get("questions", []),
+            "generation_metadata": response_data.get("generation_metadata", {})
         })
 
     # 4. Render all conversation messages in sequence
@@ -270,6 +272,45 @@ if nav_selection == "💬 Ask Advisor":
 
                 # Answer Text
                 st.markdown(msg["content"])
+
+                # Render Generated Corpus Questions Cards
+                questions_list = msg.get("questions", [])
+                if questions_list:
+                    gen_meta = msg.get("generation_metadata", {})
+                    cov = gen_meta.get("coverage", {})
+                    docs_cov = cov.get("documents", [])
+                    domains_cov = cov.get("domains", [])
+                    
+                    st.markdown(f"#### 🎯 Generated Assessment Items ({len(questions_list)} Questions)")
+                    if domains_cov:
+                        st.caption(f"📁 **Domains**: `{'`, `'.join(domains_cov)}` | 📄 **Documents Represented**: `{'`, `'.join(docs_cov)}`")
+                    st.divider()
+
+                    for q in questions_list:
+                        qid = q.get("id", "")
+                        qtext = q.get("question", "")
+                        qdiff = q.get("difficulty", "intermediate").capitalize()
+                        qtype = q.get("question_type", "conceptual").capitalize()
+                        qdom = q.get("domain", "Corpus").replace("_", " ").title()
+                        qsrc = q.get("source", "unknown.pdf")
+                        qpage = q.get("page", 1)
+                        qans = q.get("answer", "")
+                        qcid = q.get("grounding_chunk_id", "")
+
+                        st.markdown(f"##### **Q{qid}: {qtext}**")
+                        c1, c2, c3 = st.columns([1, 1, 1])
+                        with c1:
+                            st.caption(f"🏷️ **Domain**: {qdom}")
+                        with c2:
+                            st.caption(f"⚡ **Type**: {qtype}")
+                        with c3:
+                            st.caption(f"📊 **Level**: {qdiff}")
+
+                        if qans:
+                            with st.expander(f"💡 View Grounded Answer & Source Reference ({qsrc} - Page {qpage})"):
+                                st.markdown(f"**Expected Answer / Evaluation Rubric:**\n\n{qans}")
+                                st.markdown(f"---\n📄 **Source Citation**: `{qsrc} — Page {qpage}` *(Chunk ID: `{qcid}`)*")
+                        st.markdown("<br>", unsafe_allow_html=True)
                 
                 # Retrieved Evidence Chunks & Query Analysis Expander
                 evidence_list = msg.get("evidence", [])

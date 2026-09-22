@@ -14,8 +14,7 @@ from langchain_core.tools import tool, BaseTool
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import config
-from generation.generator import get_gemini_client
-from google.genai import types
+from generation.generator import generate_structured_json
 from agent.prompts import (
     build_query_resolution_messages,
     messages_to_gemini_args,
@@ -49,21 +48,8 @@ def query_rewriter(query: str, history: Optional[List[Dict[str, Any]]] = None) -
     messages = build_query_resolution_messages(cleaned_query, history=history)
     system_instruction, contents = messages_to_gemini_args(messages)
 
-    client = get_gemini_client()
-
     try:
-        response = client.models.generate_content(
-            model=config.LLM_MODEL_NAME,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.0,
-                response_mime_type="application/json",
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
-        )
-        raw_text = response.text.strip()
-        data = json.loads(raw_text)
+        data = generate_structured_json(contents=contents, system_instruction=system_instruction)
 
         action = data.get("action", "KEEP").upper()
         if action not in ["KEEP", "REWRITE"]:

@@ -31,7 +31,12 @@ Respond ONLY with a valid JSON object in this exact schema:
 """
 
 
-def verify_grounding(query: str, raw_answer: str, evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
+def verify_grounding(
+    query: str,
+    raw_answer: str,
+    evidence: List[Dict[str, Any]],
+    is_answerable: Optional[bool] = None
+) -> Dict[str, Any]:
     """
     Evaluates whether the generated answer is strictly supported by the retrieved evidence.
     
@@ -39,6 +44,7 @@ def verify_grounding(query: str, raw_answer: str, evidence: List[Dict[str, Any]]
         query: User question string.
         raw_answer: The generated answer text (excluding appended citation blocks).
         evidence: List of evidence dictionaries with 'text', 'source', 'page'.
+        is_answerable: Optional boolean indicating whether generator flagged as refusal.
         
     Returns:
         Dict with 'is_verified' (bool), 'verification_status' (str), and 'verification_details' (str).
@@ -50,20 +56,8 @@ def verify_grounding(query: str, raw_answer: str, evidence: List[Dict[str, Any]]
             "verification_details": "Query or answer is empty."
         }
 
-    # Check if answer is a refusal due to insufficient evidence
-    refusal_markers = [
-        "not in corpus",
-        "not contain enough information",
-        "do not contain enough facts",
-        "does not contain information",
-        "cannot be answered using the provided",
-        "no information provided",
-        "not mentioned in the provided",
-        "not found in the provided"
-    ]
-    is_refusal = not evidence or any(m in raw_answer.strip().lower() for m in refusal_markers)
-
-    if is_refusal:
+    # If already flagged as unanswerable or evidence is empty, confirm refusal directly
+    if is_answerable is False or not evidence:
         return {
             "is_verified": True,
             "verification_status": "REFUSAL_CONFIRMED",
@@ -71,23 +65,13 @@ def verify_grounding(query: str, raw_answer: str, evidence: List[Dict[str, Any]]
         }
 
     from agent.prompts import build_verification_messages, messages_to_gemini_args
+    from generation.generator import generate_structured_json
 
     messages = build_verification_messages(query=query, raw_answer=raw_answer, evidence=evidence)
     system_instruction, contents = messages_to_gemini_args(messages)
 
-    client = get_gemini_client()
     try:
-        response = client.models.generate_content(
-            model=config.LLM_MODEL_NAME,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.0,
-                response_mime_type="application/json",
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
-        )
-        parsed = json.loads(response.text.strip())
+        parsed = generate_structured_json(contents=contents, system_instruction=system_instruction)
         is_supported = bool(parsed.get("is_supported", False))
         explanation = str(parsed.get("explanation", "Verification complete."))
 

@@ -38,5 +38,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Grounding / Strict Corpus Response
 NOT_IN_CORPUS_MESSAGE = (
-    "Not in corpus — the provided documents do not contain enough information to answer this question."
+    "I couldn't find enough information in the provided documents to answer that. "
+    "If you'd like, I can help with a question related to topics covered in the corpus "
+    "(such as ASVAB test components, psychometric evaluation standards, or military readiness research)."
 )

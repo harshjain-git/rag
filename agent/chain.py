@@ -18,43 +18,142 @@ from agent.query_rewriter_tool import get_query_rewriter_tool
 from agent.verification import verify_grounding
 
 
-def execute_query_resolution(state: AgentState) -> AgentState:
+def execute_orchestrator(state: AgentState) -> AgentState:
     """
-    Agent step that analyzes user query with a single LLM call to decide
-    whether to KEEP the query as-is or REWRITE it for effective retrieval.
+    Autonomous Orchestrator decision node.
+    Inspects user query and conversation history, reasons about user intent
+    against registered tool capabilities, and decides:
+    - Tool invocation (with arguments)
+    - Or direct response
     """
     query = state.get("query", "").strip()
     if not query:
         return {
             **state,
             "query": "",
-            "resolved_query": "",
-            "resolution_action": "KEEP",
-            "resolution_reason": "Empty query",
             "status": "EMPTY_QUERY"
         }
 
+    from agent.prompts import build_orchestrator_decision_messages, messages_to_gemini_args
+    from generation.generator import generate_structured_json
+
     history = state.get("history")
-    tool = get_query_rewriter_tool()
-    resolution_data = tool.invoke({"query": query, "history": history})
-    action = resolution_data.get("action", "KEEP")
-    resolved_query = resolution_data.get("query", query)
-    reason = resolution_data.get("reason", "")
+    messages = build_orchestrator_decision_messages(query, history=history)
+    sys_instruction, contents = messages_to_gemini_args(messages)
+
+    try:
+        decision_data = generate_structured_json(contents=contents, system_instruction=sys_instruction)
+        action = decision_data.get("action", "call_tool")
+        tool_name = decision_data.get("tool_name")
+        args = decision_data.get("arguments", {})
+        direct_answer = decision_data.get("direct_answer")
+        reason = decision_data.get("reason", "")
+    except Exception as e:
+        # Fallback safely to standard factual retrieval flow
+        action = "call_tool"
+        tool_name = "retrieve_corpus_evidence"
+        args = {"query": query}
+        direct_answer = None
+        reason = f"Fallback to retrieval: {str(e)}"
 
     tools_used = list(state.get("tools_used", []))
-    if action == "REWRITE":
-        if tool.name not in tools_used:
-            tools_used.append(tool.name)
 
+    # Case 1: Direct response (no tool needed)
+    if action == "direct_response" and direct_answer:
+        return {
+            **state,
+            "answer": direct_answer,
+            "raw_answer": direct_answer,
+            "is_grounded": False,
+            "is_answerable": False,
+            "status": "DIRECT_RESPONSE",
+            "resolution_reason": reason
+        }
+
+    # Case 2: Question generation request
+    if tool_name == "generate_corpus_questions":
+        from agent.question_generator_tool import get_question_generator_tool
+        q_tool = get_question_generator_tool()
+        
+        q_args = args if isinstance(args, dict) else {}
+        if "num_questions" in q_args:
+            try:
+                q_args["num_questions"] = int(q_args["num_questions"])
+            except (ValueError, TypeError):
+                q_args["num_questions"] = 5
+        
+        gen_result = q_tool.invoke(q_args)
+        
+        if q_tool.name not in tools_used:
+            tools_used.append(q_tool.name)
+
+        questions = gen_result.get("questions", [])
+        q_status = gen_result.get("status", "SUCCESS")
+        coverage = gen_result.get("coverage", {})
+        docs_covered = coverage.get("documents", [])
+        
+        if questions:
+            exec_summary = (
+                f"Generated {len(questions)} assessment questions grounded in corpus reference documents "
+                f"({', '.join(docs_covered) if docs_covered else 'all corpus documents'})."
+            )
+        else:
+            exec_summary = "Unable to generate verified questions: insufficient evidence in the reference documents."
+
+        return {
+            **state,
+            "answer": exec_summary,
+            "raw_answer": exec_summary,
+            "questions": questions,
+            "generation_metadata": gen_result,
+            "tools_used": tools_used,
+            "is_grounded": True if questions else False,
+            "is_answerable": True if questions else False,
+            "is_verified": True if questions else False,
+            "verification_status": "VERIFIED_SUPPORTED" if questions else "INSUFFICIENT_EVIDENCE",
+            "verification_details": f"Generated {len(questions)} questions strictly verified against corpus chunks.",
+            "status": q_status
+        }
+
+    # Case 3: Query rewriter needed
+    if tool_name == "query_rewriter":
+        tool = get_query_rewriter_tool()
+        rewriter_query = args.get("query", query) if isinstance(args, dict) else query
+        resolution_data = tool.invoke({"query": rewriter_query, "history": history})
+        rewriter_action = resolution_data.get("action", "KEEP")
+        resolved_q = resolution_data.get("query", query)
+        rewriter_reason = resolution_data.get("reason", "")
+
+        if rewriter_action == "REWRITE":
+            if tool.name not in tools_used:
+                tools_used.append(tool.name)
+
+        return {
+            **state,
+            "query": query,
+            "resolved_query": resolved_q,
+            "resolution_action": rewriter_action,
+            "resolution_reason": rewriter_reason,
+            "tools_used": tools_used,
+            "status": "QUERY_RESOLVED"
+        }
+
+    # Case 4: Normal factual retrieval flow (tool_name == "retrieve_corpus_evidence" or default)
+    retrieval_query = args.get("query", query) if isinstance(args, dict) else query
     return {
         **state,
         "query": query,
-        "resolved_query": resolved_query,
-        "resolution_action": action,
-        "resolution_reason": reason,
+        "resolved_query": retrieval_query,
+        "resolution_action": "KEEP",
+        "resolution_reason": reason or "Standalone factual query routed to retrieval",
         "tools_used": tools_used,
         "status": "QUERY_RESOLVED"
     }
+
+
+def execute_query_resolution(state: AgentState) -> AgentState:
+    """Legacy alias for backward compatibility."""
+    return execute_orchestrator(state)
 
 
 def execute_retrieval(state: AgentState) -> AgentState:
@@ -62,6 +161,10 @@ def execute_retrieval(state: AgentState) -> AgentState:
     Agent step that invokes the registered LangChain retrieval tool
     using the resolved query and places retrieved evidence into the agent state.
     """
+    # If orchestrator already completed task (e.g. question generation or direct response), pass through
+    if state.get("questions") is not None or state.get("status") in ["SUCCESS", "PARTIAL", "DIRECT_RESPONSE"]:
+        return state
+
     if state.get("status") == "EMPTY_QUERY":
         return {
             **state,
@@ -102,6 +205,10 @@ def execute_generation(state: AgentState) -> AgentState:
     Agent step that connects the existing Gemini generation logic,
     generating a grounded response with citations or a natural refusal.
     """
+    # If orchestrator already completed task (e.g. question generation or direct response), pass through
+    if state.get("questions") is not None or state.get("status") in ["SUCCESS", "PARTIAL", "DIRECT_RESPONSE"]:
+        return state
+
     query = state.get("query", "").strip()
     if not query or state.get("status") == "EMPTY_QUERY":
         return {
@@ -136,42 +243,20 @@ def execute_generation(state: AgentState) -> AgentState:
         }
 
     from agent.prompts import build_generation_messages, messages_to_gemini_args
+    from generation.generator import generate_structured_json
     history = state.get("history")
     gen_messages = build_generation_messages(generation_query, evidence, history=history)
     system_instruction, contents = messages_to_gemini_args(gen_messages)
-    client = get_gemini_client()
 
     try:
-        response = client.models.generate_content(
-            model=config.LLM_MODEL_NAME,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.0,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
-        )
-        answer_text = response.text.strip()
+        data = generate_structured_json(contents=contents, system_instruction=system_instruction)
+        is_answerable = bool(data.get("is_answerable", False))
+        answer_text = str(data.get("answer", "")).strip()
     except Exception as e:
-        answer_text = f"Error generating LLM response: {str(e)}"
+        answer_text = str(e)
+        is_answerable = False
 
-    def is_refusal_answer(text: str) -> bool:
-        normalized = text.strip().lower()
-        refusal_markers = [
-            "not in corpus",
-            "not contain enough information",
-            "do not contain enough facts",
-            "does not contain information",
-            "cannot be answered using the provided",
-            "no information provided",
-            "not mentioned in the provided",
-            "not found in the provided"
-        ]
-        return any(marker in normalized for marker in refusal_markers)
-
-    is_refusal = is_refusal_answer(answer_text)
-
-    if is_refusal:
+    if not is_answerable:
         return {
             **state,
             "answer": answer_text,
@@ -206,12 +291,24 @@ def execute_verification(state: AgentState) -> AgentState:
     Agent step that validates the factual grounding of the generated answer
     against the retrieved evidence chunks.
     """
+    # If orchestrator already completed task (e.g. question generation or direct response), pass through
+    if state.get("questions") is not None or state.get("status") in ["SUCCESS", "PARTIAL", "DIRECT_RESPONSE"]:
+        return state
+
     if state.get("status") == "EMPTY_QUERY":
         return {
             **state,
             "is_verified": False,
             "verification_status": "EMPTY_QUERY",
             "verification_details": "No query to verify."
+        }
+
+    if state.get("is_answerable") is False or state.get("status") in ["NOT_IN_CORPUS", "INSUFFICIENT_EVIDENCE"]:
+        return {
+            **state,
+            "is_verified": True,
+            "verification_status": "REFUSAL_CONFIRMED",
+            "verification_details": "Verified refusal: Reference documents do not contain sufficient facts to answer this question."
         }
 
     verification_query = (state.get("resolved_query") or state.get("query", "")).strip()
