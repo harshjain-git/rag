@@ -83,6 +83,13 @@ st.markdown("""
         margin-bottom: 10px;
         font-size: 0.9rem;
     }
+    /* Prevent page dimming/blurring during rerun/execution */
+    div[data-testid="stAppViewBlockContainer"],
+    div[data-testid="stAppViewContainer"],
+    .stApp {
+        opacity: 1 !important;
+        filter: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -113,34 +120,48 @@ def get_document_catalog():
     return catalog
 
 
-@st.cache_data
-def get_pdf_page_image(pdf_path_str: str, page_number: int):
-    """Renders a specific PDF page as high-res PNG image bytes using PyMuPDF."""
-    try:
-        doc = pymupdf.open(pdf_path_str)
-        if page_number < 1 or page_number > len(doc):
-            return None
-        page = doc[page_number - 1]
-        pix = page.get_pixmap(dpi=150)
-        img_bytes = pix.tobytes("png")
-        doc.close()
-        return img_bytes
-    except Exception:
-        return None
+# --- Modal Dialog for PDF Preview ---
+if hasattr(st, "dialog"):
+    @st.dialog("📄 PDF Document Viewer", width="large")
+    def show_pdf_preview(doc_info: dict):
+        with open(doc_info["path"], "rb") as f:
+            pdf_bytes = f.read()
+
+        c_info, c_dl = st.columns([3, 1])
+        with c_info:
+            st.markdown(f"#### 📄 `{doc_info['name']}`")
+            st.caption(f"📑 **{doc_info['pages']} pages** • 💾 **{doc_info['size_kb']} KB** • *Continuous vertical scroll*")
+        with c_dl:
+            st.download_button(
+                label="⬇️ Download PDF",
+                data=pdf_bytes,
+                file_name=doc_info["name"],
+                mime="application/pdf",
+                key=f"dlg_dl_btn_{doc_info['name']}",
+                width="stretch"
+            )
+
+        # Native vector PDF rendering with guaranteed 750px height so the full document is clearly visible
+        b64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+        pdf_display = (
+            f'<div style="width: 100%; height: 750px; border-radius: 8px; overflow: hidden; border: 1px solid #334155; background-color: #0f172a;">'
+            f'<iframe src="data:application/pdf;base64,{b64_pdf}#toolbar=1&navpanes=0&view=FitH" '
+            f'width="100%" height="750px" allowfullscreen="true" '
+            f'style="border: none; width: 100%; height: 750px; display: block;"></iframe>'
+            f'</div>'
+        )
+        st.markdown(pdf_display, unsafe_allow_html=True)
+        st.caption("💡 *Scroll down through pages with your mouse or trackpad. Text is crisp vector quality and can be selected and copied.*")
 
 
 # --- Initialize Session State ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# # Pre-load vector store once in background
-# with st.spinner("Initializing Vector Store & Embedding Model..."):
-#     get_cached_vector_store()
-
 
 # --- Sidebar ---
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/military-medal.png", width=64)
+    st.image("https://img.icons8.com/fluency/96/chat-message.png", width=64)
     st.title("Advisor System")
     st.caption("Psychometric & Assessment Reference")
 
@@ -151,7 +172,7 @@ with st.sidebar:
     - **Architecture**: `LangChain Agentic Pipeline`
     - **Orchestration**: `LCEL Runnable Sequence`
     - **LLM**: `{config.LLM_MODEL_NAME}`
-    - **Embeddings**: `bge-base-en-v1.5`
+    - **Embeddings**: `{config.GEMINI_EMBEDDING_MODEL if config.EMBEDDING_PROVIDER == 'gemini' else config.EMBEDDING_MODEL_NAME}`
     - **Similarity Threshold**: `≤ {config.SIMILARITY_THRESHOLD}`
     - **Top-K Retrieval**: `{config.INITIAL_TOP_K}`
     - **Vector DB**: `ChromaDB` (Persistent)
@@ -159,16 +180,59 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown("### 💡 Quick Sample Queries")
-    sample_queries = [
-        "What is the ASVAB aptitude test and its components?",
-        "How do standard scores relate to percentile ranks in ASVAB?",
-        "What are the core dimensions of psychological resilience in cadets?",
-        "What is quantum thermodynamics in black holes?"  # Out-of-corpus test
-    ]
-    for sq in sample_queries:
-        if st.button(f"📌 {sq[:38]}...", help=sq, width="stretch"):
-            st.session_state.current_prompt = sq
+    catalog = get_document_catalog()
+    doc_count = len(catalog)
+
+    # 1. Collapsible Reference PDFs (clean, no hovering black tooltips)
+    with st.expander(f"📚 Reference PDFs ({doc_count} files)", expanded=False):
+        st.caption("Available corpus reference documents:")
+        if not catalog:
+            st.info("No PDF documents found in `data/raw/`.")
+        else:
+            for doc in catalog:
+                c_name, c_view, c_dl = st.columns([3, 1, 1])
+                with c_name:
+                    st.markdown(
+                        f"<div style='font-size: 0.85rem; font-weight: 500; padding-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>📄 {doc['name']}</div>",
+                        unsafe_allow_html=True
+                    )
+                with c_view:
+                    if st.button("👁️", key=f"sb_view_{doc['name']}"):
+                        if hasattr(st, "dialog"):
+                            show_pdf_preview(doc)
+                with c_dl:
+                    with open(doc["path"], "rb") as f:
+                        pdf_data = f.read()
+                    st.download_button(
+                        label="⬇️",
+                        data=pdf_data,
+                        file_name=doc["name"],
+                        mime="application/pdf",
+                        key=f"sb_dl_{doc['name']}"
+                    )
+                st.markdown("<div style='margin-bottom: 2px;'></div>", unsafe_allow_html=True)
+
+    # 2. Collapsible Corpus Summary
+    total_pages = sum(d["pages"] for d in catalog)
+    total_size_mb = sum(d["size_kb"] for d in catalog) / 1024
+
+    with st.expander("📊 Corpus Summary", expanded=False):
+        st.caption("Overview & scope of indexed knowledge base:")
+        c_s1, c_s2 = st.columns(2)
+        with c_s1:
+            st.metric("Total Documents", doc_count)
+            st.metric("Total Pages", total_pages)
+        with c_s2:
+            st.metric("Total Size", f"{total_size_mb:.2f} MB")
+            st.metric("Indexed Chunks", "999 chunks")
+
+        st.divider()
+        st.markdown("""
+        **Document Scope**:
+        - 📘 **ASVAB Standards**: `asvab1.pdf`, `asvab2.pdf`
+        - 📗 **APA Psychometrics**: `apa1.pdf`, `apa2.pdf`, `apa3.pdf`
+        - 📙 **Military Psychology**: `military_psyc1.pdf`, `military_psyc2.pdf`
+        """)
 
     st.divider()
     if st.button("🗑️ Clear Chat History", width="stretch"):
@@ -180,43 +244,161 @@ with st.sidebar:
 st.markdown('<div class="main-header">🎖️ Cadet Readiness Advisor</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Strictly grounded reference assistant powered by Gemini Flash Lite, BGE embeddings, and ChromaDB.</div>', unsafe_allow_html=True)
 
-# --- Top Navigation ---
-nav_selection = st.segmented_control(
-    "Navigation",
-    options=["💬 Ask Advisor", "📚 Document Library (PDF Viewer)"],
-    default="💬 Ask Advisor",
-    label_visibility="collapsed"
-)
+st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
 
-st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+
+# Helper to render the rich assistant response (badges, answer, cards, evidence)
+def render_assistant_card(msg: dict):
+    is_grounded = msg.get("is_grounded", False)
+    is_verified = msg.get("is_verified", False)
+    verification_status = msg.get("verification_status", "")
+    tools_used = msg.get("tools_used", [])
+    top_score = msg.get("top_score")
+    
+    # Grounding / Answerability and Verification Badges
+    col_b1, col_b2 = st.columns([1, 1])
+    with col_b1:
+        if is_grounded:
+            score_txt = f" (Distance: {top_score:.4f})" if top_score is not None else ""
+            st.markdown(f'<span class="status-badge-grounded">✅ ANSWERABLE & GROUNDED{score_txt}</span>', unsafe_allow_html=True)
+        else:
+            score_txt = f" (Nearest Doc Distance: {top_score:.4f})" if top_score is not None else ""
+            st.markdown(f'<span class="status-badge-not-corpus">⚠️ INSUFFICIENT EVIDENCE / NOT IN CORPUS{score_txt}</span>', unsafe_allow_html=True)
+    
+    with col_b2:
+        if verification_status == "REFUSAL_CONFIRMED":
+            st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Refusal Confirmed</span>', unsafe_allow_html=True)
+        elif is_verified:
+            st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Factually Supported</span>', unsafe_allow_html=True)
+        elif verification_status:
+            st.markdown(f'<span class="status-badge-not-corpus">⚠️ VERIFICATION: {verification_status}</span>', unsafe_allow_html=True)
+
+    if tools_used:
+        st.caption(f"🔧 **Tools Executed**: `{'`, `'.join(tools_used)}`")
+
+    # Answer Text
+    st.markdown(msg.get("content", ""))
+
+    # Render Generated Corpus Questions Cards
+    questions_list = msg.get("questions", [])
+    if questions_list:
+        gen_meta = msg.get("generation_metadata", {})
+        cov = gen_meta.get("coverage", {})
+        docs_cov = cov.get("documents", [])
+        domains_cov = cov.get("domains", [])
+        
+        st.markdown(f"#### 🎯 Generated Assessment Items ({len(questions_list)} Questions)")
+        if domains_cov:
+            st.caption(f"📁 **Domains**: `{'`, `'.join(domains_cov)}` | 📄 **Documents Represented**: `{'`, `'.join(docs_cov)}`")
+        st.divider()
+
+        for q in questions_list:
+            qid = q.get("id", "")
+            qtext = q.get("question", "")
+            qdiff = q.get("difficulty", "intermediate").capitalize()
+            qtype = q.get("question_type", "conceptual").capitalize()
+            qdom = q.get("domain", "Corpus").replace("_", " ").title()
+            qsrc = q.get("source", "unknown.pdf")
+            qpage = q.get("page", 1)
+            qans = q.get("answer", "")
+            qcid = q.get("grounding_chunk_id", "")
+
+            st.markdown(f"##### **Q{qid}: {qtext}**")
+            c1, c2, c3 = st.columns([1, 1, 1])
+            with c1:
+                st.caption(f"🏷️ **Domain**: {qdom}")
+            with c2:
+                st.caption(f"⚡ **Type**: {qtype}")
+            with c3:
+                st.caption(f"📊 **Level**: {qdiff}")
+
+            if qans:
+                with st.expander(f"💡 View Grounded Answer & Source Reference ({qsrc} - Page {qpage})"):
+                    st.markdown(f"**Expected Answer / Evaluation Rubric:**\n\n{qans}")
+                    st.markdown(f"---\n📄 **Source Citation**: `{qsrc} — Page {qpage}` *(Chunk ID: `{qcid}`)*")
+            st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Retrieved Evidence Chunks & Query Analysis Expander
+    evidence_list = msg.get("evidence", [])
+    resolved_q = msg.get("resolved_query")
+    orig_q = msg.get("original_query")
+    action = msg.get("resolution_action", "KEEP")
+    reason = msg.get("resolution_reason", "")
+    if evidence_list or resolved_q:
+        with st.expander(f"🔍 Inspect Query Analysis & Retrieved Chunks ({len(evidence_list)} chunks evaluated by agent)"):
+            if resolved_q:
+                action_icon = "🟢" if action == "KEEP" else "🔄"
+                st.markdown(f"##### 🎯 Query Resolution: {action_icon} `{action}`")
+                st.markdown(f"- **Decision Reason**: {reason}")
+                st.markdown(f"- **Original Query**: `{orig_q or 'N/A'}`")
+                if action == "REWRITE":
+                    st.markdown(f"- **Reformulated Retrieval Query**: `{resolved_q}`")
+                st.divider()
+
+            # Retrieval & Answerability Overview
+            st.markdown("##### 📊 Retrieval & Answerability Overview")
+            st.markdown(f"- **Retrieval Query**: `{resolved_q or orig_q}`")
+            st.markdown(f"- **Answerability Status**: `{'ANSWERABLE (GROUNDED)' if is_grounded else 'INSUFFICIENT_EVIDENCE'}`")
+            if top_score is not None:
+                st.markdown(f"- **Nearest Chunk Distance**: `{top_score:.4f}`")
+            st.markdown(f"- **Retrieved Chunks Count**: `{len(evidence_list)} chunks`")
+            st.divider()
+
+            st.markdown("##### 📄 Retrieved Evidence Chunks (Debug)")
+            for idx, chunk in enumerate(evidence_list, 1):
+                st.markdown(f"**Chunk #{idx}** — `ID: {chunk.get('chunk_id', 'N/A')}`")
+                st.caption(f"📄 Source: **{chunk.get('source')}** | Page: **{chunk.get('page')}** | Distance: **{chunk.get('score', 0):.4f}**")
+                st.code(chunk.get("text", "").strip(), language="text")
+                st.markdown("---")
 
 
 # ==========================================
-# VIEW 1: ASK ADVISOR (Chat & Evidence)
+# MAIN INTERFACE: ASK ADVISOR (Chat & Evidence)
 # ==========================================
-if nav_selection == "💬 Ask Advisor":
-    # 1. Check if a sample query was clicked in the sidebar
-    if "current_prompt" in st.session_state and st.session_state.current_prompt:
-        user_query = st.session_state.current_prompt
-        st.session_state.current_prompt = None
-    else:
-        user_query = None
+# 1. Render all prior conversation messages FIRST so screen is never blank
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        if msg["role"] == "user":
+            st.write(msg["content"])
+        else:
+            render_assistant_card(msg)
 
-    # 2. Sticky bottom chat input widget (pinned to bottom of viewport)
-    chat_input_text = st.chat_input("Ask a question regarding ASVAB, psychological resilience, or psychometric standards...")
-    if chat_input_text:
-        user_query = chat_input_text
+# 2. Check if a sample query was clicked in session state
+if "current_prompt" in st.session_state and st.session_state.current_prompt:
+    user_query = st.session_state.current_prompt
+    st.session_state.current_prompt = None
+else:
+    user_query = None
 
-    # 3. If there is a new query to process, run it and append to state
-    if user_query:
-        # Capture conversation history prior to current turn
-        prior_history = list(st.session_state.messages)
-        st.session_state.messages.append({"role": "user", "content": user_query})
-        with st.spinner("Executing LangChain Agent (Query Resolution → Retrieval Tool → Grounded Generation → Verification)..."):
-            agent_mgr = get_agent_manager()
-            response_data = agent_mgr.run(user_query, history=prior_history)
+# 3. Sticky bottom chat input widget
+chat_input_text = st.chat_input("Ask a question regarding ASVAB, psychological resilience, or psychometric standards...")
+if chat_input_text:
+    user_query = chat_input_text
 
-        st.session_state.messages.append({
+# 4. If a new query is submitted, display question immediately and stream progress
+if user_query:
+    prior_history = list(st.session_state.messages)
+    st.session_state.messages.append({"role": "user", "content": user_query})
+
+    # Immediately render the user's message so it NEVER disappears!
+    with st.chat_message("user"):
+        st.write(user_query)
+
+    # Immediately open the assistant bubble with natural dynamic status updates
+    with st.chat_message("assistant"):
+        if hasattr(st, "status"):
+            with st.status("🔍 Searching corpus documents and analyzing...", expanded=True) as status_box:
+                st.write("• Consulting psychometric & ASVAB reference documents...")
+                agent_mgr = get_agent_manager()
+                response_data = agent_mgr.run(user_query, history=prior_history)
+                st.write("• Verifying factual evidence and grounding...")
+                status_box.update(label="✅ Response ready", state="complete", expanded=False)
+        else:
+            with st.spinner("💬 Consulting reference corpus and formulating response..."):
+                agent_mgr = get_agent_manager()
+                response_data = agent_mgr.run(user_query, history=prior_history)
+
+        assistant_msg = {
             "role": "assistant",
             "content": response_data.get("answer", ""),
             "original_query": response_data.get("query", user_query),
@@ -234,190 +416,14 @@ if nav_selection == "💬 Ask Advisor":
             "evidence": response_data.get("evidence", []),
             "questions": response_data.get("questions", []),
             "generation_metadata": response_data.get("generation_metadata", {})
-        })
+        }
 
-    # 4. Render all conversation messages in sequence
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            if msg["role"] == "user":
-                st.write(msg["content"])
-            else:
-                is_grounded = msg.get("is_grounded", False)
-                is_verified = msg.get("is_verified", False)
-                verification_status = msg.get("verification_status", "")
-                tools_used = msg.get("tools_used", [])
-                top_score = msg.get("top_score")
-                status_code = msg.get("status", "GROUNDED")
-                
-                # Grounding / Answerability and Verification Badges
-                col_b1, col_b2 = st.columns([1, 1])
-                with col_b1:
-                    if is_grounded:
-                        score_txt = f" (Distance: {top_score:.4f})" if top_score is not None else ""
-                        st.markdown(f'<span class="status-badge-grounded">✅ ANSWERABLE & GROUNDED{score_txt}</span>', unsafe_allow_html=True)
-                    else:
-                        score_txt = f" (Nearest Doc Distance: {top_score:.4f})" if top_score is not None else ""
-                        st.markdown(f'<span class="status-badge-not-corpus">⚠️ INSUFFICIENT EVIDENCE / NOT IN CORPUS{score_txt}</span>', unsafe_allow_html=True)
-                
-                with col_b2:
-                    if verification_status == "REFUSAL_CONFIRMED":
-                        st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Refusal Confirmed</span>', unsafe_allow_html=True)
-                    elif is_verified:
-                        st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Factually Supported</span>', unsafe_allow_html=True)
-                    elif verification_status:
-                        st.markdown(f'<span class="status-badge-not-corpus">⚠️ VERIFICATION: {verification_status}</span>', unsafe_allow_html=True)
+        render_assistant_card(assistant_msg)
 
-                if tools_used:
-                    st.caption(f"🔧 **Tools Executed**: `{'`, `'.join(tools_used)}`")
+    # Save assistant message to persistent state and rerun cleanly
+    st.session_state.messages.append(assistant_msg)
+    st.rerun()
 
-                # Answer Text
-                st.markdown(msg["content"])
+# Extra bottom space so the last message is never covered by the fixed bottom input bar
+st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
 
-                # Render Generated Corpus Questions Cards
-                questions_list = msg.get("questions", [])
-                if questions_list:
-                    gen_meta = msg.get("generation_metadata", {})
-                    cov = gen_meta.get("coverage", {})
-                    docs_cov = cov.get("documents", [])
-                    domains_cov = cov.get("domains", [])
-                    
-                    st.markdown(f"#### 🎯 Generated Assessment Items ({len(questions_list)} Questions)")
-                    if domains_cov:
-                        st.caption(f"📁 **Domains**: `{'`, `'.join(domains_cov)}` | 📄 **Documents Represented**: `{'`, `'.join(docs_cov)}`")
-                    st.divider()
-
-                    for q in questions_list:
-                        qid = q.get("id", "")
-                        qtext = q.get("question", "")
-                        qdiff = q.get("difficulty", "intermediate").capitalize()
-                        qtype = q.get("question_type", "conceptual").capitalize()
-                        qdom = q.get("domain", "Corpus").replace("_", " ").title()
-                        qsrc = q.get("source", "unknown.pdf")
-                        qpage = q.get("page", 1)
-                        qans = q.get("answer", "")
-                        qcid = q.get("grounding_chunk_id", "")
-
-                        st.markdown(f"##### **Q{qid}: {qtext}**")
-                        c1, c2, c3 = st.columns([1, 1, 1])
-                        with c1:
-                            st.caption(f"🏷️ **Domain**: {qdom}")
-                        with c2:
-                            st.caption(f"⚡ **Type**: {qtype}")
-                        with c3:
-                            st.caption(f"📊 **Level**: {qdiff}")
-
-                        if qans:
-                            with st.expander(f"💡 View Grounded Answer & Source Reference ({qsrc} - Page {qpage})"):
-                                st.markdown(f"**Expected Answer / Evaluation Rubric:**\n\n{qans}")
-                                st.markdown(f"---\n📄 **Source Citation**: `{qsrc} — Page {qpage}` *(Chunk ID: `{qcid}`)*")
-                        st.markdown("<br>", unsafe_allow_html=True)
-                
-                # Retrieved Evidence Chunks & Query Analysis Expander
-                evidence_list = msg.get("evidence", [])
-                resolved_q = msg.get("resolved_query")
-                orig_q = msg.get("original_query")
-                action = msg.get("resolution_action", "KEEP")
-                reason = msg.get("resolution_reason", "")
-                if evidence_list or resolved_q:
-                    with st.expander(f"🔍 Inspect Query Analysis & Retrieved Chunks ({len(evidence_list)} chunks evaluated by agent)"):
-                        if resolved_q:
-                            action_icon = "🟢" if action == "KEEP" else "🔄"
-                            st.markdown(f"##### 🎯 Query Resolution: {action_icon} `{action}`")
-                            st.markdown(f"- **Decision Reason**: {reason}")
-                            st.markdown(f"- **Original Query**: `{orig_q or 'N/A'}`")
-                            if action == "REWRITE":
-                                st.markdown(f"- **Reformulated Retrieval Query**: `{resolved_q}`")
-                            st.divider()
-
-                        # Retrieval & Answerability Overview
-                        st.markdown("##### 📊 Retrieval & Answerability Overview")
-                        st.markdown(f"- **Retrieval Query**: `{resolved_q or orig_q}`")
-                        st.markdown(f"- **Answerability Status**: `{'ANSWERABLE (GROUNDED)' if is_grounded else 'INSUFFICIENT_EVIDENCE'}`")
-                        if top_score is not None:
-                            st.markdown(f"- **Nearest Chunk Distance**: `{top_score:.4f}`")
-                        st.markdown(f"- **Retrieved Chunks Count**: `{len(evidence_list)} chunks`")
-                        st.divider()
-
-                        st.markdown("##### 📄 Retrieved Evidence Chunks (Debug)")
-                        for idx, chunk in enumerate(evidence_list, 1):
-                            st.markdown(f"**Chunk #{idx}** — `ID: {chunk.get('chunk_id', 'N/A')}`")
-                            st.caption(f"📄 Source: **{chunk.get('source')}** | Page: **{chunk.get('page')}** | Distance: **{chunk.get('score', 0):.4f}**")
-                            st.code(chunk.get("text", "").strip(), language="text")
-                            st.markdown("---")
-
-    # Extra bottom space so the last message is never covered by the fixed bottom input bar
-    st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
-
-
-# ==========================================
-# VIEW 2: DOCUMENT LIBRARY (PDF Viewer)
-# ==========================================
-elif nav_selection == "📚 Document Library (PDF Viewer)":
-    st.subheader("📚 Corpus Document Library")
-    st.caption("Browse, inspect, or download any of the reference PDF files in the corpus.")
-
-    catalog = get_document_catalog()
-
-    if not catalog:
-        st.warning("No PDF documents found in `data/raw/`.")
-    else:
-        # Layout: Left column file selector & info, right column viewer
-        col_list, col_viewer = st.columns([1, 2], gap="medium")
-
-        with col_list:
-            st.markdown("### Available Documents")
-            doc_names = [d["name"] for d in catalog]
-            selected_doc_name = st.selectbox("Select document to inspect:", doc_names)
-
-            # Find selected doc info
-            selected_doc = next(d for d in catalog if d["name"] == selected_doc_name)
-
-            st.markdown(f"""
-            - **Filename**: `{selected_doc['name']}`
-            - **Total Pages**: `{selected_doc['pages']}`
-            - **File Size**: `{selected_doc['size_kb']} KB`
-            - **Path**: `data/raw/{selected_doc['name']}`
-            """)
-
-            # Download button
-            with open(selected_doc["path"], "rb") as f:
-                pdf_data = f.read()
-
-            st.download_button(
-                label=f"⬇️ Download {selected_doc['name']}",
-                data=pdf_data,
-                file_name=selected_doc["name"],
-                mime="application/pdf",
-                width="stretch"
-            )
-
-            st.divider()
-            st.markdown("### 📊 Corpus Summary")
-            total_pages = sum(d["pages"] for d in catalog)
-            total_size_mb = sum(d["size_kb"] for d in catalog) / 1024
-            st.metric("Total Documents", len(catalog))
-            st.metric("Total Pages", total_pages)
-            st.metric("Total Corpus Size", f"{total_size_mb:.2f} MB")
-
-        with col_viewer:
-            st.markdown(f"### 📄 Document Viewer: `{selected_doc_name}`")
-            total_doc_pages = selected_doc["pages"]
-            
-            if total_doc_pages > 0:
-                c_slider, c_info = st.columns([3, 1])
-                with c_slider:
-                    current_page = st.slider("Page Navigator:", min_value=1, max_value=total_doc_pages, value=1, step=1)
-                with c_info:
-                    st.markdown(f"<div style='margin-top: 28px; font-weight: 600;'>Page {current_page} of {total_doc_pages}</div>", unsafe_allow_html=True)
-
-                page_img = get_pdf_page_image(str(selected_doc["path"]), current_page)
-                if page_img:
-                    st.image(
-                        page_img,
-                        caption=f"{selected_doc_name} — Page {current_page} / {total_doc_pages}",
-                        width="stretch"
-                    )
-                else:
-                    st.warning("Unable to render page.")
-            else:
-                st.info("This document does not contain readable pages.")

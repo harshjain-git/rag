@@ -25,6 +25,13 @@ from google.genai import types
 _LLM_CLIENT = None
 
 
+def __getattr__(name: str) -> Any:
+    if name == "SYSTEM_PROMPT":
+        from agent.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
+        return CADET_ADVISOR_BASE_INSTRUCTIONS
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
 def get_gemini_client() -> genai.Client:
     """
     Initializes and returns a singleton instance of the Google GenAI Client
@@ -41,10 +48,6 @@ def get_gemini_client() -> genai.Client:
     return _LLM_CLIENT
 
 
-from agent.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
-
-# Strict Grounded System Prompt (Centralized)
-SYSTEM_PROMPT = CADET_ADVISOR_BASE_INSTRUCTIONS
 
 
 def generate_structured_json(
@@ -146,12 +149,14 @@ def generate_answer(query: str, grounding_result: dict = None) -> dict:
     prompt_text = format_context_prompt(query, evidence)
     client = get_gemini_client()
 
+    from agent.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
+
     try:
         response = client.models.generate_content(
             model=config.LLM_MODEL_NAME,
             contents=prompt_text,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=CADET_ADVISOR_BASE_INSTRUCTIONS,
                 temperature=0.0,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
             )

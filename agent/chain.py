@@ -43,6 +43,8 @@ def execute_orchestrator(state: AgentState) -> AgentState:
 
     try:
         decision_data = generate_structured_json(contents=contents, system_instruction=sys_instruction)
+        if not isinstance(decision_data, dict):
+            decision_data = {}
         action = decision_data.get("action", "call_tool")
         tool_name = decision_data.get("tool_name")
         args = decision_data.get("arguments", {})
@@ -224,7 +226,7 @@ def execute_generation(state: AgentState) -> AgentState:
     top_score = state.get("top_score")
 
     # Reuse existing generation and citation modules
-    from generation.generator import generate_natural_refusal, format_context_prompt, get_gemini_client, SYSTEM_PROMPT
+    from generation.generator import generate_natural_refusal, format_context_prompt, get_gemini_client
     from citation.citation_engine import extract_citations, format_citations_block
     from google.genai import types
 
@@ -250,8 +252,12 @@ def execute_generation(state: AgentState) -> AgentState:
 
     try:
         data = generate_structured_json(contents=contents, system_instruction=system_instruction)
-        is_answerable = bool(data.get("is_answerable", False))
-        answer_text = str(data.get("answer", "")).strip()
+        if isinstance(data, dict):
+            is_answerable = bool(data.get("is_answerable", False))
+            answer_text = str(data.get("answer", "")).strip()
+        else:
+            is_answerable = False
+            answer_text = str(data).strip()
     except Exception as e:
         answer_text = str(e)
         is_answerable = False

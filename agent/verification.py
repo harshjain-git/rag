@@ -72,8 +72,12 @@ def verify_grounding(
 
     try:
         parsed = generate_structured_json(contents=contents, system_instruction=system_instruction)
-        is_supported = bool(parsed.get("is_supported", False))
-        explanation = str(parsed.get("explanation", "Verification complete."))
+        if isinstance(parsed, dict):
+            is_supported = bool(parsed.get("is_supported", False))
+            explanation = str(parsed.get("explanation", "Verification complete."))
+        else:
+            is_supported = False
+            explanation = "Verification model returned non-dictionary response."
 
         return {
             "is_verified": is_supported,

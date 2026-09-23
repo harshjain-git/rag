@@ -50,6 +50,8 @@ def query_rewriter(query: str, history: Optional[List[Dict[str, Any]]] = None) -
 
     try:
         data = generate_structured_json(contents=contents, system_instruction=system_instruction)
+        if not isinstance(data, dict):
+            data = {}
 
         action = data.get("action", "KEEP").upper()
         if action not in ["KEEP", "REWRITE"]:

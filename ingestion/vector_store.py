@@ -38,7 +38,7 @@ class GeminiEmbeddings:
     """
     def __init__(self):
         from google import genai
-        api_key = os.environ.get("GEMINI_API_KEY")
+        api_key = os.environ.get("GEMINI_API_KEY") or config.GEMINI_API_KEY
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not configured.")
         self.client = genai.Client(api_key=api_key)

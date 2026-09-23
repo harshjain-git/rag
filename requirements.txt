@@ -1,5 +1,6 @@
 # LangChain Core & Integrations
 langchain>=0.1.0
+langchain-core>=0.1.0
 langchain-community>=0.0.10
 langchain-text-splitters>=0.0.1
 langchain-chroma>=0.1.0
@@ -18,7 +19,7 @@ chromadb>=0.4.22
 google-genai>=0.1.0
 
 # Web Interface
-streamlit>=1.30.0
+streamlit>=1.40.0
 
 # Evaluation & Metrics (Phase 12)
 # ragas>=0.1.0  # Optional: requires C++ build tools for scikit-network on Python 3.14

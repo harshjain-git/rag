@@ -338,10 +338,16 @@ def generate_corpus_questions(
                 dom = chunk_obj["domain"]
             else:
                 # If chunk ID was invalid, fallback to the first chunk from the evidence pack
-                src = evidence_pack[0]["source"]
-                pg = evidence_pack[0]["page"]
-                dom = evidence_pack[0]["domain"]
-                cid = evidence_pack[0]["chunk_id"]
+                if evidence_pack:
+                    src = evidence_pack[0].get("source", "unknown.pdf")
+                    pg = evidence_pack[0].get("page", 1)
+                    dom = evidence_pack[0].get("domain", "general_corpus")
+                    cid = evidence_pack[0].get("chunk_id", "")
+                else:
+                    src = "unknown.pdf"
+                    pg = 1
+                    dom = "general_corpus"
+                    cid = ""
 
             cand["grounding_chunk_id"] = cid
             cand["source"] = src
