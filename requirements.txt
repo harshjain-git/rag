@@ -4,27 +4,19 @@ langchain-core>=0.1.0
 langchain-community>=0.0.10
 langchain-text-splitters>=0.0.1
 langchain-chroma>=0.1.0
-langchain-google-genai>=0.0.5
 
 # PDF Extraction
 pymupdf>=1.23.0
 
-# Vector Database & Embeddings
+# Vector Database
 chromadb>=0.4.22
-# sentence-transformers>=2.5.0
-# torch>=2.0.0
-# torchvision>=0.15.0
 
-# Generator LLM (Gemini 2.5 Flash)
+# Generator LLM (Gemini SDK)
 google-genai>=0.1.0
 
 # Web Interface
 streamlit>=1.40.0
 
-# Evaluation & Metrics (Phase 12)
-# ragas>=0.1.0  # Optional: requires C++ build tools for scikit-network on Python 3.14
+# Data & Utilities
 pandas>=2.0.0
-
-
-# Utilities
 python-dotenv>=1.0.0

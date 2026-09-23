@@ -5,7 +5,6 @@ without modifying the underlying retrieval or generation implementations.
 """
 
 import sys
-import json
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -13,22 +12,6 @@ from typing import List, Dict, Any, Optional
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import config
-from generation.generator import get_gemini_client
-from google.genai import types
-
-VERIFICATION_SYSTEM_PROMPT = """You are a strict Fact Verification and Grounding Judge for Cadet Readiness Advisor.
-Your job is to check whether a GENERATED ANSWER is completely supported by the provided RETRIEVED EVIDENCE CHUNKS.
-
-CRITERIA:
-1. SUPPORTED: All key facts, metrics, numbers, and definitions in the answer are directly mentioned or clearly entailed in the evidence chunks.
-2. UNSUPPORTED: The answer introduces new external facts, claims, or contradicts the provided excerpts.
-
-Respond ONLY with a valid JSON object in this exact schema:
-{
-  "is_supported": true,
-  "explanation": "Brief explanation of grounding assessment"
-}
-"""
 
 
 def verify_grounding(
@@ -64,7 +47,7 @@ def verify_grounding(
             "verification_details": "Verified refusal: Retrieved documents do not contain sufficient facts to answer this question."
         }
 
-    from agent.prompts import build_verification_messages, messages_to_gemini_args
+    from application.prompts import build_verification_messages, messages_to_gemini_args
     from generation.generator import generate_structured_json
 
     messages = build_verification_messages(query=query, raw_answer=raw_answer, evidence=evidence)

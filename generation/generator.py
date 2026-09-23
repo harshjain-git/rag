@@ -1,5 +1,9 @@
 """
 Gemini Client Initialization & LLM Generation Module for Cadet Readiness Advisor.
+
+This module is now a **thin facade** that delegates all LLM calls to the
+``infrastructure.gemini.gemini_llm.GeminiLLM`` adapter. Existing callers
+continue to work without any import changes.
 """
 
 import os
@@ -18,36 +22,22 @@ warnings.filterwarnings("ignore")
 logging.getLogger("google.genai").setLevel(logging.ERROR)
 
 import config
-from google import genai
-from google.genai import types
-
-# Shared cached client instance
-_LLM_CLIENT = None
 
 
 def __getattr__(name: str) -> Any:
     if name == "SYSTEM_PROMPT":
-        from agent.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
+        from application.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
         return CADET_ADVISOR_BASE_INSTRUCTIONS
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-def get_gemini_client() -> genai.Client:
+def get_gemini_client():
     """
-    Initializes and returns a singleton instance of the Google GenAI Client
-    using the API key configured in .env / config.py.
+    Returns the underlying google.genai Client for backward compatibility.
+    Delegates to the GeminiLLM adapter's lazy-initialised client.
     """
-    global _LLM_CLIENT
-    if _LLM_CLIENT is None:
-        api_key = config.GEMINI_API_KEY
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY is not set in environment or .env file.")
-        
-        _LLM_CLIENT = genai.Client(api_key=api_key)
-    
-    return _LLM_CLIENT
-
-
+    from infrastructure.gemini.gemini_llm import get_llm
+    return get_llm().client
 
 
 def generate_structured_json(
@@ -58,43 +48,35 @@ def generate_structured_json(
     """
     Executes a structured JSON generation call to Gemini and parses the response safely.
     Centralized helper reused across orchestrator, query rewriter, verification, and question generation.
+
+    Now delegates to ``GeminiLLM.generate_json()``.
     """
-    import json
-    client = get_gemini_client()
-    response = client.models.generate_content(
-        model=config.LLM_MODEL_NAME,
+    from infrastructure.gemini.gemini_llm import get_llm
+    return get_llm().generate_json(
         contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            temperature=temperature,
-            response_mime_type="application/json",
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-        )
+        system_instruction=system_instruction,
+        temperature=temperature,
     )
-    raw_text = response.text.strip() if hasattr(response, "text") and response.text else "{}"
-    return json.loads(raw_text)
 
 def generate_natural_refusal(query: str) -> str:
     """
-    Generates a polite, context-aware refusal using Gemini Flash Lite
+    Generates a polite, context-aware refusal using Gemini
     when a question is out of corpus, explaining why it cannot be answered.
+
+    Now delegates to ``GeminiLLM.generate_text()``.
     """
-    from agent.prompts import build_generation_messages, messages_to_gemini_args
-    client = get_gemini_client()
+    from application.prompts import build_generation_messages, messages_to_gemini_args
+
     messages = build_generation_messages(query=query, evidence=[])
     system_instruction, contents = messages_to_gemini_args(messages)
 
     try:
-        response = client.models.generate_content(
-            model=config.LLM_MODEL_NAME,
+        from infrastructure.gemini.gemini_llm import get_llm
+        return get_llm().generate_text(
             contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                temperature=0.0,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
+            system_instruction=system_instruction,
+            temperature=0.0,
         )
-        return response.text.strip()
     except Exception:
         # Fallback to standard message if API call fails
         return config.NOT_IN_CORPUS_MESSAGE
@@ -147,21 +129,16 @@ def generate_answer(query: str, grounding_result: dict = None) -> dict:
 
     evidence = grounding_result.get("evidence", [])
     prompt_text = format_context_prompt(query, evidence)
-    client = get_gemini_client()
 
-    from agent.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
+    from application.prompts import CADET_ADVISOR_BASE_INSTRUCTIONS
+    from infrastructure.gemini.gemini_llm import get_llm
 
     try:
-        response = client.models.generate_content(
-            model=config.LLM_MODEL_NAME,
+        answer_text = get_llm().generate_text(
             contents=prompt_text,
-            config=types.GenerateContentConfig(
-                system_instruction=CADET_ADVISOR_BASE_INSTRUCTIONS,
-                temperature=0.0,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
-            )
+            system_instruction=CADET_ADVISOR_BASE_INSTRUCTIONS,
+            temperature=0.0,
         )
-        answer_text = response.text.strip()
     except Exception as e:
         answer_text = f"Error generating LLM response: {str(e)}"
 
@@ -180,4 +157,3 @@ def generate_answer(query: str, grounding_result: dict = None) -> dict:
         "evidence": evidence,
         "status": "GROUNDED"
     }
-

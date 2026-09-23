@@ -62,3 +62,4 @@ logs/
 
 AGENTS.md
 chroma_db_backup*/
+chroma_db_temp/

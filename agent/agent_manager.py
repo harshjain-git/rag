@@ -38,19 +38,10 @@ class CadetAgentManager:
                 "status": "EMPTY_QUERY"
             }
 
-        from agent.chain import get_agent_pipeline
-
-        initial_state = {
-            "query": cleaned_query,
-            "resolved_query": None,
-            "history": history if history is not None else [],
-            "evidence": [],
-            "tools_used": [],
-            "status": "START"
-        }
+        from agent.pipeline import get_agent_pipeline
 
         pipeline = get_agent_pipeline()
-        result_state = pipeline.invoke(initial_state)
+        result_state = pipeline.run(query=cleaned_query, history=history)
         return result_state
 
 

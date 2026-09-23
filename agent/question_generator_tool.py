@@ -17,8 +17,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import config
 from retrieval.retriever import get_cached_vector_store
-from generation.generator import generate_structured_json, get_gemini_client
-from agent.prompts import (
+from generation.generator import generate_structured_json
+from application.prompts import (
     build_question_generation_messages,
     build_question_verification_messages,
     messages_to_gemini_args,

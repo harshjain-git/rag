@@ -12,9 +12,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from langchain_core.runnables import RunnableLambda
 import config
-from agent.state import AgentState
-from agent.retrieval_tool import get_retrieval_tool
-from agent.query_rewriter_tool import get_query_rewriter_tool
+from core.models import AgentState
+from core.registry import ToolRegistry
 from agent.verification import verify_grounding
 
 
@@ -34,7 +33,7 @@ def execute_orchestrator(state: AgentState) -> AgentState:
             "status": "EMPTY_QUERY"
         }
 
-    from agent.prompts import build_orchestrator_decision_messages, messages_to_gemini_args
+    from application.prompts import build_orchestrator_decision_messages, messages_to_gemini_args
     from generation.generator import generate_structured_json
 
     history = state.get("history")
@@ -119,15 +118,16 @@ def execute_orchestrator(state: AgentState) -> AgentState:
 
     # Case 3: Query rewriter needed
     if tool_name == "query_rewriter":
-        tool = get_query_rewriter_tool()
-        rewriter_query = args.get("query", query) if isinstance(args, dict) else query
-        resolution_data = tool.invoke({"query": rewriter_query, "history": history})
+        tool = ToolRegistry.get(tool_name)
+        # Build inputs; for query rewriter we need query and history
+        inputs = {"query": args.get("query", query) if isinstance(args, dict) else query, "history": history}
+        resolution_data = tool.invoke(inputs)
         rewriter_action = resolution_data.get("action", "KEEP")
         resolved_q = resolution_data.get("query", query)
         rewriter_reason = resolution_data.get("reason", "")
 
         if rewriter_action == "REWRITE":
-            if tool.name not in tools_used:
+            if getattr(tool, "name", None) and tool.name not in tools_used:
                 tools_used.append(tool.name)
 
         return {
@@ -184,7 +184,7 @@ def execute_retrieval(state: AgentState) -> AgentState:
             "status": "EMPTY_QUERY"
         }
 
-    tool = get_retrieval_tool()
+    tool = ToolRegistry.get("retrieve_corpus_evidence")
     evidence_chunks = tool.invoke({"query": retrieval_query})
 
     tools_used = list(state.get("tools_used", []))
@@ -226,9 +226,8 @@ def execute_generation(state: AgentState) -> AgentState:
     top_score = state.get("top_score")
 
     # Reuse existing generation and citation modules
-    from generation.generator import generate_natural_refusal, format_context_prompt, get_gemini_client
+    from generation.generator import generate_natural_refusal
     from citation.citation_engine import extract_citations, format_citations_block
-    from google.genai import types
 
     generation_query = (state.get("resolved_query") or query).strip()
 
@@ -244,7 +243,7 @@ def execute_generation(state: AgentState) -> AgentState:
             "status": "NOT_IN_CORPUS"
         }
 
-    from agent.prompts import build_generation_messages, messages_to_gemini_args
+    from application.prompts import build_generation_messages, messages_to_gemini_args
     from generation.generator import generate_structured_json
     history = state.get("history")
     gen_messages = build_generation_messages(generation_query, evidence, history=history)

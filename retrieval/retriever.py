@@ -1,6 +1,9 @@
 """
 Dense Semantic Retrieval Module for Cadet Readiness Advisor.
-Queries persistent ChromaDB vector store and retrieves Top-K evidence chunks with metadata.
+
+This module is now a **thin facade** that delegates all vector store queries
+to the ``infrastructure.chroma.chroma_retriever.ChromaRetriever`` adapter.
+Existing callers continue to work without any import changes.
 """
 
 from typing import List, Dict, Any
@@ -10,20 +13,15 @@ from pathlib import Path
 # Load central configuration
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 import config
-from ingestion.vector_store import get_vector_store
-
-# Shared vector store instance for instant queries
-_VECTOR_STORE = None
 
 
 def get_cached_vector_store():
     """
-    Returns cached persistent Chroma vector store to avoid re-initializing on every query.
+    Returns cached persistent Chroma vector store for backward compatibility.
+    Delegates to the ChromaRetriever adapter's lazy-initialised store.
     """
-    global _VECTOR_STORE
-    if _VECTOR_STORE is None:
-        _VECTOR_STORE = get_vector_store()
-    return _VECTOR_STORE
+    from infrastructure.chroma.chroma_retriever import get_retriever
+    return get_retriever().vector_store
 
 
 def retrieve_evidence(
@@ -34,6 +32,8 @@ def retrieve_evidence(
     """
     Performs fast dense semantic retrieval against ChromaDB for a given query,
     filtering out results that do not satisfy the similarity threshold.
+
+    Now delegates to ``ChromaRetriever.retrieve()``.
     
     Args:
         query: User question string.
@@ -43,31 +43,12 @@ def retrieve_evidence(
     Returns:
         List of dictionaries containing retrieved text, metadata, and similarity score.
     """
-    if not query or not query.strip():
-        return []
-
-    vector_store = get_cached_vector_store()
-
-    # Similarity search returning (Document, score) tuples
-    results = vector_store.similarity_search_with_score(query.strip(), k=top_k)
-
-    evidence_list = []
-    for doc, score in results:
-        dist_score = float(score)
-        if similarity_threshold is not None and dist_score > similarity_threshold:
-            continue
-            
-        meta = doc.metadata.copy()
-        evidence_list.append({
-            "text": doc.page_content,
-            "metadata": meta,
-            "source": meta.get("source", "unknown.pdf"),
-            "page": meta.get("page", 1),
-            "chunk_id": meta.get("chunk_id", ""),
-            "score": dist_score
-        })
-
-    return evidence_list
+    from infrastructure.chroma.chroma_retriever import get_retriever
+    return get_retriever().retrieve(
+        query=query,
+        top_k=top_k,
+        similarity_threshold=similarity_threshold,
+    )
 
 
 def evaluate_grounding(query: str, top_k: int = config.INITIAL_TOP_K) -> Dict[str, Any]:
@@ -75,16 +56,25 @@ def evaluate_grounding(query: str, top_k: int = config.INITIAL_TOP_K) -> Dict[st
     Phase 8 Grounding & Sufficiency Evaluator.
     Retrieves evidence and determines whether retrieved corpus chunks are sufficient to answer.
     Also captures the raw top distance score before threshold filtering for analysis.
+
+    Now delegates to ``ChromaRetriever.retrieve()`` and ``ChromaRetriever.retrieve_raw()``.
     
     Returns:
         Dict with 'is_grounded', 'evidence', 'top_score', and 'fallback_message'.
     """
+    from infrastructure.chroma.chroma_retriever import get_retriever
+    retriever = get_retriever()
+
     # Fetch unfiltered top candidate to get the exact raw L2 distance score
-    raw_results = retrieve_evidence(query, top_k=1, similarity_threshold=None)
+    raw_results = retriever.retrieve_raw(query=query, top_k=1)
     top_score = raw_results[0]["score"] if raw_results else None
 
     # Fetch evidence filtered by similarity threshold
-    evidence = retrieve_evidence(query, top_k=top_k, similarity_threshold=config.SIMILARITY_THRESHOLD)
+    evidence = retriever.retrieve(
+        query=query,
+        top_k=top_k,
+        similarity_threshold=config.SIMILARITY_THRESHOLD,
+    )
     
     if not evidence:
         return {
@@ -102,4 +92,3 @@ def evaluate_grounding(query: str, top_k: int = config.INITIAL_TOP_K) -> Dict[st
         "fallback_message": None,
         "status": "GROUNDED"
     }
-

@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import config
-from retrieval.retriever import retrieve_evidence, evaluate_grounding
+from retrieval.retriever import retrieve_evidence
 from langchain_core.tools import tool, BaseTool
 
 

@@ -32,8 +32,7 @@ import streamlit as st
 import pymupdf
 
 import config
-from retrieval.retriever import get_cached_vector_store
-from agent.agent_manager import get_agent_manager
+from application.services.agent_service import get_agent_service
 
 # --- Streamlit Page Setup ---
 st.set_page_config(
@@ -380,37 +379,16 @@ if user_query:
 
     # Immediately open the assistant bubble with natural dynamic status updates
     with st.chat_message("assistant"):
+        agent_service = get_agent_service()
         if hasattr(st, "status"):
             with st.status("🔍 Searching corpus documents and analyzing...", expanded=True) as status_box:
                 st.write("• Consulting psychometric & ASVAB reference documents...")
-                agent_mgr = get_agent_manager()
-                response_data = agent_mgr.run(user_query, history=prior_history)
+                assistant_msg = agent_service.query(user_query, history=prior_history)
                 st.write("• Verifying factual evidence and grounding...")
                 status_box.update(label="✅ Response ready", state="complete", expanded=False)
         else:
             with st.spinner("💬 Consulting reference corpus and formulating response..."):
-                agent_mgr = get_agent_manager()
-                response_data = agent_mgr.run(user_query, history=prior_history)
-
-        assistant_msg = {
-            "role": "assistant",
-            "content": response_data.get("answer", ""),
-            "original_query": response_data.get("query", user_query),
-            "resolved_query": response_data.get("resolved_query"),
-            "resolution_action": response_data.get("resolution_action", "KEEP"),
-            "resolution_reason": response_data.get("resolution_reason", ""),
-            "is_grounded": response_data.get("is_grounded", False),
-            "is_answerable": response_data.get("is_answerable", response_data.get("is_grounded", False)),
-            "is_verified": response_data.get("is_verified", False),
-            "verification_status": response_data.get("verification_status", ""),
-            "verification_details": response_data.get("verification_details", ""),
-            "status": response_data.get("status", ""),
-            "tools_used": response_data.get("tools_used", []),
-            "top_score": response_data.get("top_score"),
-            "evidence": response_data.get("evidence", []),
-            "questions": response_data.get("questions", []),
-            "generation_metadata": response_data.get("generation_metadata", {})
-        }
+                assistant_msg = agent_service.query(user_query, history=prior_history)
 
         render_assistant_card(assistant_msg)
 

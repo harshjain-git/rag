@@ -1,0 +1,43 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant App as streamlit_app.py
+    participant Node1 as 1. execute_orchestrator
+    participant Node2 as 2. execute_retrieval
+    participant Node3 as 3. execute_generation
+    participant Node4 as 4. execute_verification
+    participant Gemini as Gemini Flash Lite
+    participant Chroma as ChromaDB
+
+    User->>App: Submits question
+    App->>Node1: initial_state (query, history)
+    
+    rect rgb(20, 30, 50)
+        Note over Node1,Gemini: Step 1: Intent Decision & Query Resolution
+        Node1->>Gemini: Classify intent & check if pronoun rewrite needed
+        Gemini-->>Node1: Decision JSON (Action: call_tool, tool: retrieve_corpus_evidence, resolved_query)
+    end
+
+    rect rgb(30, 40, 60)
+        Note over Node2,Chroma: Step 2: Dense Semantic Search
+        Node1->>Node2: state (resolved_query)
+        Node2->>Chroma: similarity_search_with_score(resolved_query, top_k=7)
+        Chroma-->>Node2: Top-7 Chunks with L2 distance scores
+    end
+
+    rect rgb(20, 30, 50)
+        Note over Node3,Gemini: Step 3: Grounded Answer Synthesis
+        Node2->>Node3: state (evidence chunks)
+        Node3->>Gemini: Prompt with Excerpts + Strict Grounding Rules
+        Gemini-->>Node3: Answer JSON (is_answerable, answer text)
+    end
+
+    rect rgb(30, 40, 60)
+        Note over Node4,Gemini: Step 4: Fact Grounding Audit
+        Node3->>Node4: state (draft answer + evidence)
+        Node4->>Gemini: Verify if answer is 100% supported by excerpts
+        Gemini-->>Node4: Verdict (is_verified: true, status: VERIFIED_SUPPORTED)
+    end
+
+    Node4-->>App: Final AgentState
+    App-->>User: Renders rich response, badges, citations, and debug chunks

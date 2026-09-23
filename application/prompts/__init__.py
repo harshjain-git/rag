@@ -1,11 +1,8 @@
-"""
-Prompts facade for Cadet Readiness Advisor.
+# application/prompts package
 
-This module is retained for backward compatibility. All prompt constants and message
-builders have been relocated to ``application.prompts``.
-"""
+"""Prompts and message builders for Cadet Readiness Advisor."""
 
-from application.prompts import (
+from .cadet_prompts import (
     CADET_ADVISOR_BASE_INSTRUCTIONS,
     QUERY_RESOLUTION_DIRECTIVES,
     VERIFICATION_DIRECTIVES,
