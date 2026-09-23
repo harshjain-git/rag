@@ -35,7 +35,8 @@ ACTIVE TOOLS:
 # =============================================================================
 
 QUERY_RESOLUTION_DIRECTIVES = """TASK: QUERY RESOLUTION
-Decide KEEP (query is clear standalone) or REWRITE (query has ambiguous pronouns/ellipsis needing chat history).
+Decide KEEP (query is clear standalone) or REWRITE (query has ambiguous pronouns/ellipsis like "them", "the guidelines", "give me those", "explain").
+If REWRITE, resolve pronouns/context using chat history into a specific retrieval query targeting body text and specific details (e.g., "APA Guidelines for Psychological Assessment and Evaluation specific guidelines standards principles text").
 Output JSON:
 {"action": "KEEP" | "REWRITE", "query": "<standalone query>", "reason": "<brief reason>"}"""
 
@@ -73,8 +74,9 @@ Output JSON:
 
 
 GENERATION_DIRECTIVES = """TASK: GROUNDED ANSWER GENERATION
-1. If excerpts contain sufficient facts: {"is_answerable": true, "answer": "<factual answer grounded ONLY in excerpts>"}
-2. If excerpts lack sufficient facts: {"is_answerable": false, "answer": "<polite refusal naming topic and offering help on ASVAB/psychometrics/readiness>"}"""
+1. Summarize and detail all specific guidelines, principles, standards, and facts found in the provided excerpts that address the user's question.
+2. If the excerpts contain relevant details or partial facts: {"is_answerable": true, "answer": "<factual answer grounded ONLY in excerpts>"}
+3. Only if the excerpts contain ZERO relevant facts for the topic: {"is_answerable": false, "answer": "<polite refusal naming topic and offering help on ASVAB/psychometrics/readiness>"}"""
 
 
 # =============================================================================
@@ -99,6 +101,7 @@ def format_conversation_context(history: Optional[List[Dict[str, Any]]], max_tur
                 content = content[:300] + "..."
             if content:
                 lines.append(f"{role}: {content}")
+                print("")
     return "\n".join(lines) if lines else "No previous conversation context."
 
 

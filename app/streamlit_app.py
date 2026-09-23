@@ -255,26 +255,20 @@ def render_assistant_card(msg: dict):
     tools_used = msg.get("tools_used", [])
     top_score = msg.get("top_score")
     
-    # Grounding / Answerability and Verification Badges
-    col_b1, col_b2 = st.columns([1, 1])
-    with col_b1:
-        if is_grounded:
+    # Grounding / Answerability and Verification Badges (rendered ONLY for grounded answers)
+    if is_grounded:
+        col_b1, col_b2 = st.columns([1, 1])
+        with col_b1:
             score_txt = f" (Distance: {top_score:.4f})" if top_score is not None else ""
             st.markdown(f'<span class="status-badge-grounded">✅ ANSWERABLE & GROUNDED{score_txt}</span>', unsafe_allow_html=True)
-        else:
-            score_txt = f" (Nearest Doc Distance: {top_score:.4f})" if top_score is not None else ""
-            st.markdown(f'<span class="status-badge-not-corpus">⚠️ INSUFFICIENT EVIDENCE / NOT IN CORPUS{score_txt}</span>', unsafe_allow_html=True)
-    
-    with col_b2:
-        if verification_status == "REFUSAL_CONFIRMED":
-            st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Refusal Confirmed</span>', unsafe_allow_html=True)
-        elif is_verified:
-            st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Factually Supported</span>', unsafe_allow_html=True)
-        elif verification_status:
-            st.markdown(f'<span class="status-badge-not-corpus">⚠️ VERIFICATION: {verification_status}</span>', unsafe_allow_html=True)
+        with col_b2:
+            if is_verified:
+                st.markdown(f'<span class="status-badge-grounded">🛡️ VERIFIED: Factually Supported</span>', unsafe_allow_html=True)
+            elif verification_status:
+                st.markdown(f'<span class="status-badge-not-corpus">⚠️ VERIFICATION: {verification_status}</span>', unsafe_allow_html=True)
 
-    if tools_used:
-        st.caption(f"🔧 **Tools Executed**: `{'`, `'.join(tools_used)}`")
+        if tools_used:
+            st.caption(f"🔧 **Tools Executed**: `{'`, `'.join(tools_used)}`")
 
     # Answer Text
     st.markdown(msg.get("content", ""))
