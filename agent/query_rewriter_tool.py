@@ -13,7 +13,7 @@ from langchain_core.tools import tool, BaseTool
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import config
-from generation.generator import generate_structured_json
+from infrastructure.gemini import generate_structured_json
 from application.prompts import (
     build_query_resolution_messages,
     messages_to_gemini_args,

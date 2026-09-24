@@ -1,4 +1,4 @@
-# application/prompts/cadet_prompts.py
+# application/prompts.py
 
 """Centralized Prompt and Message Definitions for Cadet Readiness Advisor.
 

@@ -1,4 +1,4 @@
-# infrastructure/chroma/chroma_retriever.py
+# infrastructure/chroma.py
 
 """Concrete Retriever adapter backed by ChromaDB.
 
@@ -24,8 +24,8 @@ class ChromaRetriever:
     - Raw (unfiltered) retrieval for grounding score capture.
     """
 
-    def __init__(self) -> None:
-        self._vector_store = None
+    def __init__(self, vector_store: Any = None) -> None:
+        self._vector_store = vector_store
 
     # ---- lazy vector store -------------------------------------------
 
@@ -44,11 +44,7 @@ class ChromaRetriever:
         top_k: int = config.INITIAL_TOP_K,
         similarity_threshold: Optional[float] = config.SIMILARITY_THRESHOLD,
     ) -> List[Dict[str, Any]]:
-        """Retrieve evidence chunks filtered by similarity threshold.
-
-        Mirrors the existing ``retrieval.retriever.retrieve_evidence`` logic
-        but encapsulated behind the ``Retriever`` Protocol.
-        """
+        """Retrieve evidence chunks filtered by similarity threshold."""
         if not query or not query.strip():
             return []
 
@@ -98,7 +94,7 @@ def get_retriever() -> ChromaRetriever:
 
     Usage::
 
-        from infrastructure.chroma.chroma_retriever import get_retriever
+        from infrastructure.chroma import get_retriever
         retriever = get_retriever()
         evidence = retriever.retrieve(query="...", top_k=5)
     """
@@ -106,3 +102,51 @@ def get_retriever() -> ChromaRetriever:
     if _CHROMA_RETRIEVER is None:
         _CHROMA_RETRIEVER = ChromaRetriever()
     return _CHROMA_RETRIEVER
+
+
+def retrieve_evidence(
+    query: str,
+    top_k: int = config.INITIAL_TOP_K,
+    similarity_threshold: Optional[float] = config.SIMILARITY_THRESHOLD,
+) -> List[Dict[str, Any]]:
+    """Convenience helper for evidence retrieval."""
+    return get_retriever().retrieve(
+        query=query,
+        top_k=top_k,
+        similarity_threshold=similarity_threshold,
+    )
+
+
+def get_cached_vector_store():
+    """Convenience helper returning the cached vector store instance."""
+    return get_retriever().vector_store
+
+
+def evaluate_grounding(query: str, top_k: int = config.INITIAL_TOP_K) -> Dict[str, Any]:
+    """Retrieves evidence and determines if evidence is sufficient."""
+    retriever = get_retriever()
+    raw_results = retriever.retrieve_raw(query=query, top_k=1)
+    top_score = raw_results[0]["score"] if raw_results else None
+
+    evidence = retriever.retrieve(
+        query=query,
+        top_k=top_k,
+        similarity_threshold=config.SIMILARITY_THRESHOLD,
+    )
+
+    if not evidence:
+        return {
+            "is_grounded": False,
+            "evidence": [],
+            "top_score": top_score,
+            "fallback_message": config.NOT_IN_CORPUS_MESSAGE,
+            "status": "NOT_IN_CORPUS",
+        }
+
+    return {
+        "is_grounded": True,
+        "evidence": evidence,
+        "top_score": top_score,
+        "fallback_message": None,
+        "status": "GROUNDED",
+    }

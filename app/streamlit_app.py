@@ -32,7 +32,7 @@ import streamlit as st
 import pymupdf
 
 import config
-from application.services.agent_service import get_agent_service
+from application.services import get_agent_service
 
 # --- Streamlit Page Setup ---
 st.set_page_config(

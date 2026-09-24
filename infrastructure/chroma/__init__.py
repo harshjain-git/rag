@@ -1,1 +1,0 @@
-# infrastructure/chroma package

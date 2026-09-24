@@ -1,4 +1,4 @@
-# application/services/agent_service.py
+# application/services.py
 
 """Application Service facade for the Cadet Readiness Advisor.
 
@@ -23,32 +23,7 @@ class AgentService:
         user_query: str,
         history: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """Execute a query through the advisor agent and return a formatted message dict.
-
-        Args:
-            user_query: The raw string query from the user.
-            history: Optional list of past chat messages.
-
-        Returns:
-            A clean dictionary formatted for UI consumption and session persistence:
-            - 'role': 'assistant'
-            - 'content': generated answer text
-            - 'original_query': original user input
-            - 'resolved_query': rewritten or normalized query
-            - 'resolution_action': 'KEEP' or 'REWRITE'
-            - 'resolution_reason': reason string
-            - 'is_grounded': bool
-            - 'is_answerable': bool
-            - 'is_verified': bool
-            - 'verification_status': e.g. 'VERIFIED_SUPPORTED'
-            - 'verification_details': string explanation
-            - 'status': terminal status (e.g. 'GROUNDED', 'DIRECT_RESPONSE')
-            - 'tools_used': list of tools invoked
-            - 'top_score': float distance or similarity
-            - 'evidence': list of evidence chunks
-            - 'questions': list of quiz questions if generated
-            - 'generation_metadata': dictionary of extra metadata
-        """
+        """Execute a query through the advisor agent and return a formatted message dict."""
         raw_state: AgentState = self._pipeline.run(query=user_query, history=history)
         return self._format_assistant_message(raw_state, user_query)
 

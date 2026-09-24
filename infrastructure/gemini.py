@@ -1,8 +1,8 @@
-# infrastructure/gemini/gemini_llm.py
+# infrastructure/gemini.py
 
 """Concrete LLM adapter for Google Gemini.
 
-This is the **only** file in the entire project that imports the ``google.genai``
+This is the **only** file in the agent runtime that imports the ``google.genai``
 SDK. Every other module depends on the ``core.ports.LLM`` Protocol instead.
 
 Swapping Gemini for another provider (OpenAI, Anthropic, etc.) requires only
@@ -71,11 +71,7 @@ class GeminiLLM:
         system_instruction: str = "",
         temperature: float = 0.0,
     ) -> Dict[str, Any]:
-        """Send a prompt and parse the structured JSON response.
-
-        This is the drop-in replacement for the old
-        ``generation.generator.generate_structured_json`` helper.
-        """
+        """Send a prompt and parse the structured JSON response."""
         response = self.client.models.generate_content(
             model=self._model_name,
             contents=contents,
@@ -101,12 +97,7 @@ class GeminiLLM:
         system_instruction: str = "",
         temperature: float = 0.0,
     ) -> str:
-        """Send a prompt and return the plain-text response.
-
-        This is the drop-in replacement for the old
-        ``generation.generator.generate_natural_refusal`` and similar
-        free-form generation calls.
-        """
+        """Send a prompt and return the plain-text response."""
         response = self.client.models.generate_content(
             model=self._model_name,
             contents=contents,
@@ -122,7 +113,7 @@ class GeminiLLM:
 
 
 # ---------------------------------------------------------------------------
-# Module-level singleton (mirrors the old _LLM_CLIENT pattern)
+# Module-level singleton
 # ---------------------------------------------------------------------------
 
 _GEMINI_LLM: GeminiLLM | None = None
@@ -133,7 +124,7 @@ def get_llm() -> GeminiLLM:
 
     Usage::
 
-        from infrastructure.gemini.gemini_llm import get_llm
+        from infrastructure.gemini import get_llm
         llm = get_llm()
         result = llm.generate_json(contents="...", system_instruction="...")
     """
@@ -141,3 +132,33 @@ def get_llm() -> GeminiLLM:
     if _GEMINI_LLM is None:
         _GEMINI_LLM = GeminiLLM()
     return _GEMINI_LLM
+
+
+def generate_structured_json(
+    contents: str,
+    system_instruction: str = "",
+    temperature: float = 0.0,
+) -> Any:
+    """Convenience helper for structured JSON generation."""
+    return get_llm().generate_json(
+        contents=contents,
+        system_instruction=system_instruction,
+        temperature=temperature,
+    )
+
+
+def generate_natural_refusal(query: str) -> str:
+    """Generates a polite refusal when a question cannot be answered from corpus."""
+    from application.prompts import build_generation_messages, messages_to_gemini_args
+
+    messages = build_generation_messages(query=query, evidence=[])
+    system_instruction, contents = messages_to_gemini_args(messages)
+
+    try:
+        return get_llm().generate_text(
+            contents=contents,
+            system_instruction=system_instruction,
+            temperature=0.0,
+        )
+    except Exception:
+        return config.NOT_IN_CORPUS_MESSAGE

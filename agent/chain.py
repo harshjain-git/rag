@@ -34,7 +34,7 @@ def execute_orchestrator(state: AgentState) -> AgentState:
         }
 
     from application.prompts import build_orchestrator_decision_messages, messages_to_gemini_args
-    from generation.generator import generate_structured_json
+    from infrastructure.gemini import generate_structured_json
 
     history = state.get("history")
     messages = build_orchestrator_decision_messages(query, history=history)
@@ -226,7 +226,7 @@ def execute_generation(state: AgentState) -> AgentState:
     top_score = state.get("top_score")
 
     # Reuse existing generation and citation modules
-    from generation.generator import generate_natural_refusal
+    from infrastructure.gemini import generate_natural_refusal, generate_structured_json
     from citation.citation_engine import extract_citations, format_citations_block
 
     generation_query = (state.get("resolved_query") or query).strip()
@@ -244,7 +244,6 @@ def execute_generation(state: AgentState) -> AgentState:
         }
 
     from application.prompts import build_generation_messages, messages_to_gemini_args
-    from generation.generator import generate_structured_json
     history = state.get("history")
     gen_messages = build_generation_messages(generation_query, evidence, history=history)
     system_instruction, contents = messages_to_gemini_args(gen_messages)

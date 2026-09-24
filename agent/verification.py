@@ -48,7 +48,7 @@ def verify_grounding(
         }
 
     from application.prompts import build_verification_messages, messages_to_gemini_args
-    from generation.generator import generate_structured_json
+    from infrastructure.gemini import generate_structured_json
 
     messages = build_verification_messages(query=query, raw_answer=raw_answer, evidence=evidence)
     system_instruction, contents = messages_to_gemini_args(messages)

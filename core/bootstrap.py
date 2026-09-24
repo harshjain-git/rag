@@ -16,22 +16,28 @@ from agent.tools import (
     QuestionGeneratorTool,
 )
 
-# 1. Orchestrator tool
-ToolRegistry.register("orchestrator", OrchestratorTool())
+def bootstrap_tools() -> None:
+    """Register all application tools in the ToolRegistry."""
+    # 1. Orchestrator tool
+    ToolRegistry.register("orchestrator", OrchestratorTool())
 
-# 2. Retrieval tool
-ToolRegistry.register("retrieve_corpus_evidence", RetrievalTool())
+    # 2. Retrieval tool
+    ToolRegistry.register("retrieve_corpus_evidence", RetrievalTool())
 
-# 3. Generation tool
-ToolRegistry.register("generate_answer", GenerationTool())
+    # 3. Generation tool
+    ToolRegistry.register("generate_answer", GenerationTool())
 
-# 4. Verification tool (registered under both names for compatibility)
-verification_tool = VerificationTool()
-ToolRegistry.register("verify_grounding", verification_tool)
-ToolRegistry.register("verification", verification_tool)
+    # 4. Verification tool (registered under both names for compatibility)
+    verification_tool = VerificationTool()
+    ToolRegistry.register("verify_grounding", verification_tool)
+    ToolRegistry.register("verification", verification_tool)
 
-# 5. Query Rewriter tool
-ToolRegistry.register("query_rewriter", QueryRewriterTool())
+    # 5. Query Rewriter tool
+    ToolRegistry.register("query_rewriter", QueryRewriterTool())
 
-# 6. Question Generator tool
-ToolRegistry.register("generate_corpus_questions", QuestionGeneratorTool())
+    # 6. Question Generator tool
+    ToolRegistry.register("generate_corpus_questions", QuestionGeneratorTool())
+
+
+# Execute on import for zero-config startup
+bootstrap_tools()
