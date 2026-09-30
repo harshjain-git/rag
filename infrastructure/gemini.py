@@ -1,19 +1,15 @@
 # infrastructure/gemini.py
 
-"""Concrete LLM adapter for Google Gemini.
+"""LLM adapter for Google Gemini.
 
-This is the **only** file in the agent runtime that imports the ``google.genai``
-SDK. Every other module depends on the ``core.ports.LLM`` Protocol instead.
-
-Swapping Gemini for another provider (OpenAI, Anthropic, etc.) requires only
-creating a new adapter that satisfies the same Protocol — zero changes to agent
-code, tools, or pipeline.
+Interacts with the Google Gemini API using the official ``google.genai`` SDK
+for structured JSON generation, native tool calling, and text responses.
 """
 
 import json
 import warnings
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 # Suppress noisy genai warnings
 warnings.filterwarnings("ignore")
@@ -26,11 +22,12 @@ import config
 
 
 class GeminiLLM:
-    """Implements ``core.ports.LLM`` using Google Gemini.
+    """Gemini client adapter.
 
     Features:
     - Singleton client (created once, reused across calls).
     - Structured JSON mode via ``response_mime_type="application/json"``.
+    - Native tool calling via ``generate_with_tools``.
     - Plain-text generation for refusals and free-form answers.
     - Configurable model name and API key via ``config.py``.
     """
@@ -111,6 +108,69 @@ class GeminiLLM:
         )
         return response.text.strip() if hasattr(response, "text") and response.text else ""
 
+    def generate_with_tools(
+        self,
+        contents: Any,
+        tools: List[Any],
+        system_instruction: str = "",
+        temperature: float = 0.0,
+    ) -> Dict[str, Any]:
+        """Send a prompt with native tool definitions and return function call or text.
+
+        Uses the existing google.genai.Client, does NOT enforce JSON response mode,
+        and leaves automatic_function_calling disabled so the caller maintains full
+        lifecycle control.
+        """
+        config_kwargs: Dict[str, Any] = {
+            "temperature": temperature,
+            "tools": tools,
+            "automatic_function_calling": types.AutomaticFunctionCallingConfig(
+                disable=True
+            ),
+        }
+        if system_instruction:
+            config_kwargs["system_instruction"] = system_instruction
+
+        response = self.client.models.generate_content(
+            model=self._model_name,
+            contents=contents,
+            config=types.GenerateContentConfig(**config_kwargs),
+        )
+
+        function_calls = getattr(response, "function_calls", None)
+        if function_calls:
+            first_call = function_calls[0]
+            call_args = dict(first_call.args) if getattr(first_call, "args", None) else {}
+            all_calls = [
+                {
+                    "name": c.name,
+                    "arguments": dict(c.args) if getattr(c, "args", None) else {},
+                }
+                for c in function_calls
+            ]
+            return {
+                "call_type": "function_call",
+                "function_name": first_call.name,
+                "arguments": call_args,
+                "function_calls": all_calls,
+                "text": None,
+                "raw_response": response,
+            }
+
+        raw_text = (
+            response.text.strip()
+            if hasattr(response, "text") and response.text
+            else ""
+        )
+        return {
+            "call_type": "text",
+            "function_name": None,
+            "arguments": {},
+            "function_calls": [],
+            "text": raw_text,
+            "raw_response": response,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Module-level singleton
@@ -142,6 +202,21 @@ def generate_structured_json(
     """Convenience helper for structured JSON generation."""
     return get_llm().generate_json(
         contents=contents,
+        system_instruction=system_instruction,
+        temperature=temperature,
+    )
+
+
+def generate_with_native_tools(
+    contents: Any,
+    tools: List[Any],
+    system_instruction: str = "",
+    temperature: float = 0.0,
+) -> Dict[str, Any]:
+    """Convenience helper for Gemini native tool calling."""
+    return get_llm().generate_with_tools(
+        contents=contents,
+        tools=tools,
         system_instruction=system_instruction,
         temperature=temperature,
     )

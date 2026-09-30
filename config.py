@@ -42,3 +42,7 @@ NOT_IN_CORPUS_MESSAGE = (
     "If you'd like, I can help with a question related to topics covered in the corpus "
     "(such as ASVAB test components, psychometric evaluation standards, or military readiness research)."
 )
+
+# Structured RAG (SRAG) A2A Service URL
+SRAG_A2A_URL = os.getenv("SRAG_A2A_URL", "http://localhost:8001")
+

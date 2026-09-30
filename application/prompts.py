@@ -14,7 +14,6 @@ from langchain_core.messages import (
     AIMessage,
     ToolMessage,
 )
-import config
 
 
 # =============================================================================
@@ -62,18 +61,20 @@ Output JSON:
 
 ORCHESTRATOR_SYSTEM_PROMPT = f"""{CADET_ADVISOR_BASE_INSTRUCTIONS}
 
-TASK: ORCHESTRATION DECISION
-Analyze user input and decide tool or direct response.
-Tools:
-- `generate_corpus_questions`: for creating questions, quizzes, practice items (args: num_questions, scope, domains, documents, difficulty).
-- `retrieve_corpus_evidence`: for factual/conceptual reference questions (args: query).
-- `query_rewriter`: for ambiguous pronoun/follow-up queries needing history (args: query).
+TASK: AUTONOMOUS ROUTING & TOOL CALLING
+Analyze the user input in the context of recent conversation history.
+Determine whether to call one of the native tools or provide a direct natural language response.
 
-DIRECT RESPONSE RULE:
-- If the user asks for answers, solutions, explanations, or follow-ups to previously generated questions in the conversation history (e.g. "give also the answer", "answer question 2", "show the solutions"), DO NOT use retrieval. Set "action": "direct_response" and provide the answers clearly in "direct_answer".
+ROUTING CRITERIA:
+1. `retrieve_corpus_evidence`: Call when the question asks about facts, definitions, standards, scoring, or concepts covered in the reference document corpus (ASVAB subtests, psychometrics, psychological resilience, cadet readiness).
+2. `ask_srag_database`: Call when the question asks about structured, tabular, or database records (e.g., employee counts, database tables, personnel counts, records, 'How many employees are currently hired?').
+3. `generate_corpus_questions`: Call when the user explicitly asks to generate, create, or synthesize assessment questions, quizzes, or practice items from the reference corpus.
+4. `query_rewriter`: Call when the user query is an ambiguous follow-up, uses unresolved pronouns ('it', 'them', 'these'), or depends heavily on previous dialogue context to be reformulated into a standalone query.
 
-Output JSON:
-{{"action": "call_tool" | "direct_response", "tool_name": "generate_corpus_questions" | "retrieve_corpus_evidence" | "query_rewriter" | null, "arguments": {{...}}, "direct_answer": "<text if direct_response else null>", "reason": "..."}}"""
+DIRECT RESPONSE CRITERIA:
+- If the user is asking for solutions, answers, or explanations to previously generated questions in the conversation history (e.g. "give also the answer", "answer question 2", "show solutions"), DO NOT invoke retrieval or database tools. Provide the answer directly in natural text.
+- If the user offers a simple greeting or non-domain conversational pleasantry, respond directly in natural text.
+"""
 
 GENERATION_DIRECTIVES = """TASK: GROUNDED ANSWER GENERATION
 1. Summarize and detail all specific guidelines, principles, standards, and facts found in the provided excerpts that address the user's question.
@@ -84,31 +85,6 @@ GENERATION_DIRECTIVES = """TASK: GROUNDED ANSWER GENERATION
 # =============================================================================
 # 3. MESSAGE BUILDERS USING LANGCHAIN CORE CLASSES
 # =============================================================================
-
-def format_conversation_context(history: Optional[List[Dict[str, Any]]], max_turns: int = 4) -> str:
-    """Formats recent dialogue turns into a clean text string."""
-    if not history:
-        return "No previous conversation context."
-    recent_turns = history[-max_turns:]
-    lines = []
-    for msg in recent_turns:
-        role = msg.get("role", "user").capitalize()
-        content = msg.get("content", "").strip()
-        q_list = msg.get("questions", [])
-        if q_list and role == "Assistant":
-            q_str = "\n".join(f"Q{i}: {q.get('question')} | Answer: {q.get('answer')}" for i, q in enumerate(q_list[:5], 1))
-            lines.append(f"{role}: {content}\n{q_str}")
-        else:
-            if role == "Assistant" and len(content) > 300:
-                content = content[:300] + "..."
-            if content:
-                lines.append(f"{role}: {content}")
-    return "\n".join(lines) if lines else "No previous conversation context."
-
-
-def get_base_system_message() -> SystemMessage:
-    """Returns the core Cadet Readiness Advisor SystemMessage."""
-    return SystemMessage(content=CADET_ADVISOR_BASE_INSTRUCTIONS)
 
 
 def build_query_resolution_messages(
@@ -228,7 +204,7 @@ def build_orchestrator_decision_messages(
     query: str,
     history: Optional[List[Dict[str, Any]]] = None,
 ) -> List[BaseMessage]:
-    """Constructs LangChain messages for the autonomous Orchestrator decision."""
+    """Constructs LangChain messages for Gemini native tool calling."""
     messages: List[BaseMessage] = [SystemMessage(content=ORCHESTRATOR_SYSTEM_PROMPT)]
 
     if history:
@@ -241,14 +217,17 @@ def build_orchestrator_decision_messages(
             else:
                 q_list = msg.get("questions", [])
                 if q_list:
-                    q_str = "\n".join(f"Q{i}: {q.get('question')}\nAnswer: {q.get('answer')}" for i, q in enumerate(q_list[:5], 1))
+                    q_str = "\n".join(
+                        f"Q{i}: {q.get('question')}\nAnswer: {q.get('answer')}"
+                        for i, q in enumerate(q_list[:5], 1)
+                    )
                     messages.append(AIMessage(content=f"{content}\n\nGENERATED QUESTIONS & ANSWERS:\n{q_str}"))
                 else:
                     if len(content) > 300:
                         content = content[:300] + "..."
                     messages.append(AIMessage(content=content))
 
-    prompt_text = f"USER INPUT: {query.strip()}\n\nDECISION JSON:"
+    prompt_text = f"USER INPUT: {query.strip()}"
     messages.append(HumanMessage(content=prompt_text))
     return messages
 
@@ -277,3 +256,21 @@ def messages_to_gemini_args(messages: List[BaseMessage]) -> Tuple[str, str]:
     system_instruction = "\n\n".join(system_parts)
     contents = "\n\n".join(content_parts)
     return system_instruction, contents
+
+
+__all__ = [
+    "CADET_ADVISOR_BASE_INSTRUCTIONS",
+    "QUERY_RESOLUTION_DIRECTIVES",
+    "VERIFICATION_DIRECTIVES",
+    "QUESTION_GENERATION_DIRECTIVES",
+    "QUESTION_BATCH_VERIFICATION_DIRECTIVES",
+    "ORCHESTRATOR_SYSTEM_PROMPT",
+    "GENERATION_DIRECTIVES",
+    "build_query_resolution_messages",
+    "build_generation_messages",
+    "build_verification_messages",
+    "build_question_generation_messages",
+    "build_question_verification_messages",
+    "build_orchestrator_decision_messages",
+    "messages_to_gemini_args",
+]

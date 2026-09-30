@@ -1,18 +1,11 @@
 # agent/pipeline.py
 
-"""Generic Agent Pipeline for Cadet Readiness Advisor.
+"""Agent Execution Pipeline for Cadet Readiness Advisor.
 
-This module replaces the old LCEL RunnableLambda chain (``chain.py``) with a
-clean, registry-driven pipeline class. The pipeline:
-
-- Uses the ``ToolRegistry`` for all tool lookups (no hard-coded tool implementations).
-- Orchestrates the standard workflow: orchestrator -> retrieve -> generate -> verify.
-- Is easily extensible: adding a new capability means registering a new tool
-  in the ``ToolRegistry`` -- **never touching this file**.
-- Provides both ``run(query, history)`` and ``invoke(state)`` for full compatibility.
-
-The old ``chain.py`` is retained for backward compatibility, while this pipeline
-serves as the primary execution engine.
+Coordinates end-to-end query execution:
+1. Autonomous orchestrator routing (Gemini Native Tool Calling)
+2. Terminal early-exit handling (direct responses, quiz generation, empty queries)
+3. Standard document retrieval-augmented workflow (retrieve -> generate -> verify)
 """
 
 from typing import Dict, Any, List, Optional
@@ -24,12 +17,9 @@ from core.registry import ToolRegistry
 class AgentPipeline:
     """Registry-driven agent execution pipeline.
 
-    The pipeline delegates every step to a tool looked up from the
-    ``ToolRegistry``. The only knowledge baked in is the **standard
-    workflow sequence** -- the ordered list of tool names to execute after
-    the orchestrator has made its decision.
-
-    Adding a new tool never requires modifying ``__init__`` or ``run``.
+    The pipeline coordinates execution by looking up step callables from the
+    ``ToolRegistry``. The orchestrator decides the initial routing; if retrieval
+    is required, the standard sequence (retrieve -> generate -> verify) executes.
     """
 
     # Standard workflow executed after the orchestrator decision.
@@ -95,8 +85,8 @@ class AgentPipeline:
 
         # Step 2: Execute the standard workflow (retrieval -> generation -> verification)
         for tool_name in self.STANDARD_WORKFLOW:
-            tool = self._registry.get(tool_name)
-            state = tool.invoke(state, {})
+            step_func = self._registry.get(tool_name)
+            state = step_func(state)
 
             # If a step resulted in an early-exit condition, break cleanly
             if self._is_terminal(state):
@@ -116,9 +106,9 @@ class AgentPipeline:
     # ------------------------------------------------------------------
 
     def _run_orchestrator(self, state: AgentState) -> AgentState:
-        """Invoke the registered orchestrator tool."""
+        """Invoke the registered orchestrator tool callable."""
         orchestrator = self._registry.get("orchestrator")
-        return orchestrator.invoke(state, {})
+        return orchestrator(state)
 
     @staticmethod
     def _is_terminal(state: AgentState) -> bool:

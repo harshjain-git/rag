@@ -1,12 +1,8 @@
 # infrastructure/chroma.py
 
-"""Concrete Retriever adapter backed by ChromaDB.
+"""Retriever adapter backed by ChromaDB.
 
-This is the **only** file that interacts with the ChromaDB vector store for
-retrieval. All other modules depend on the ``core.ports.Retriever`` Protocol.
-
-Swapping ChromaDB for Qdrant, Pinecone, FAISS, etc. requires only creating a
-new adapter — zero changes to agent code, tools, or pipeline.
+Provides vector store similarity search and raw retrieval for grounding scoring.
 """
 
 from typing import Any, Dict, List, Optional
@@ -16,7 +12,7 @@ from ingestion.vector_store import get_vector_store
 
 
 class ChromaRetriever:
-    """Implements ``core.ports.Retriever`` using a LangChain-Chroma vector store.
+    """Retriever implementation using a LangChain-Chroma vector store.
 
     Features:
     - Lazy singleton vector store (created on first call, reused thereafter).
@@ -122,31 +118,9 @@ def get_cached_vector_store():
     return get_retriever().vector_store
 
 
-def evaluate_grounding(query: str, top_k: int = config.INITIAL_TOP_K) -> Dict[str, Any]:
-    """Retrieves evidence and determines if evidence is sufficient."""
-    retriever = get_retriever()
-    raw_results = retriever.retrieve_raw(query=query, top_k=1)
-    top_score = raw_results[0]["score"] if raw_results else None
-
-    evidence = retriever.retrieve(
-        query=query,
-        top_k=top_k,
-        similarity_threshold=config.SIMILARITY_THRESHOLD,
-    )
-
-    if not evidence:
-        return {
-            "is_grounded": False,
-            "evidence": [],
-            "top_score": top_score,
-            "fallback_message": config.NOT_IN_CORPUS_MESSAGE,
-            "status": "NOT_IN_CORPUS",
-        }
-
-    return {
-        "is_grounded": True,
-        "evidence": evidence,
-        "top_score": top_score,
-        "fallback_message": None,
-        "status": "GROUNDED",
-    }
+__all__ = [
+    "ChromaRetriever",
+    "get_retriever",
+    "retrieve_evidence",
+    "get_cached_vector_store",
+]

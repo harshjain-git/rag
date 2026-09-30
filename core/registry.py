@@ -1,27 +1,27 @@
-"""Central registry that maps tool names to concrete tool implementations."""
+"""Central registry that maps tool names directly to callable functions."""
 
-from typing import Dict, List, Optional
-from core.ports import Tool
+from typing import Dict, List, Optional, Callable, Any
 
 
 class ToolRegistry:
-    """Global registry for tool instances.
+    """Global registry for tool functions and callables.
 
     Usage:
-        ToolRegistry.register("retrieve_corpus_evidence", my_tool)
-        tool = ToolRegistry.get("retrieve_corpus_evidence")
+        ToolRegistry.register("retrieve_corpus_evidence", execute_retrieval)
+        func = ToolRegistry.get("retrieve_corpus_evidence")
+        result = func(state)
     """
 
-    _registry: Dict[str, Tool] = {}
+    _registry: Dict[str, Callable[..., Any]] = {}
 
     @classmethod
-    def register(cls, name: str, tool: Tool) -> None:
-        """Register a tool under *name*."""
+    def register(cls, name: str, tool: Callable[..., Any]) -> None:
+        """Register a callable tool under *name*."""
         cls._registry[name] = tool
 
     @classmethod
-    def get(cls, name: str) -> Tool:
-        """Retrieve a registered tool by *name*."""
+    def get(cls, name: str) -> Callable[..., Any]:
+        """Retrieve a registered tool callable by *name*."""
         if name not in cls._registry:
             raise KeyError(f"Tool '{name}' is not registered in ToolRegistry.")
         return cls._registry[name]
@@ -37,7 +37,7 @@ class ToolRegistry:
         return sorted(cls._registry.keys())
 
     @classmethod
-    def unregister(cls, name: str) -> Optional[Tool]:
+    def unregister(cls, name: str) -> Optional[Callable[..., Any]]:
         """Remove and return a tool by *name* if registered."""
         return cls._registry.pop(name, None)
 
@@ -45,3 +45,4 @@ class ToolRegistry:
     def clear(cls) -> None:
         """Clear all registered tools."""
         cls._registry.clear()
+
