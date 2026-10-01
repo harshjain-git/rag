@@ -16,10 +16,18 @@ coupling to MCP or PostgreSQL.
 import asyncio
 import logging
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Coroutine, Any
 import httpx
 from dotenv import load_dotenv
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 from a2a.client import A2ACardResolver, ClientConfig, create_client
 from a2a.client.errors import A2AClientError, AgentCardResolutionError
