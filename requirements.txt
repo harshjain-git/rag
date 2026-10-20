@@ -20,3 +20,6 @@ streamlit>=1.40.0
 # Data & Utilities
 pandas>=2.0.0
 python-dotenv>=1.0.0
+
+# Agent-to-Agent Protocol
+a2a-sdk>=1.2.0

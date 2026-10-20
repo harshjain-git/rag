@@ -23,17 +23,19 @@ TARGET_CHUNK_OVERLAP = 120  # Overlap
 
 # Retrieval & Grounding Settings
 INITIAL_TOP_K = 5
-# Strict distance threshold for BGE L2 distance: lower distance = higher similarity.
-# Chunks with distance > 0.85 are considered irrelevant / out of corpus context.
+# Distance thresholds (lower distance = higher similarity):
+# - BGE model: L2 distance threshold = 0.85
+# - Gemini model: Squared L2 distance threshold = 0.22 (empirically calibrated:
+#   answerable queries score 0.13-0.197, unanswerable queries score >= 0.225)
 BGE_SIMILARITY_THRESHOLD = 0.85
-GEMINI_SIMILARITY_THRESHOLD = None
+GEMINI_SIMILARITY_THRESHOLD = 0.22
 
 SIMILARITY_THRESHOLD = (
     GEMINI_SIMILARITY_THRESHOLD if EMBEDDING_PROVIDER == "gemini" else BGE_SIMILARITY_THRESHOLD
 )
 
 # Generator LLM Settings (Gemini Flash Lite)
-LLM_MODEL_NAME = "gemini-3.5-flash-lite"
+LLM_MODEL_NAME = "gemini-3.8-flash"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Grounding / Strict Corpus Response
